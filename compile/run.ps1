@@ -56,6 +56,104 @@ $exeDir = $scriptDir
 $flexHome = Join-Path $exeDir "..\aflex_lite"
 Set-Location $exeDir
 
+# Sync online files from GitHub into ./online and ./files — returns number of downloaded files
+function Sync-OnlineFiles {
+    param(
+        [string]$ApiUrl = "https://api.github.com/repos/masterwebx/SSF2-Event-Vault/contents/compile/online",
+        $LogTextBox = $null
+    )
+
+    $folders = @("online", "files")
+    foreach ($folder in $folders) {
+        if (!(Test-Path $folder)) { New-Item -ItemType Directory -Path $folder | Out-Null }
+    }
+
+    $logPath = Join-Path $exeDir "history.log"
+    $downloaded = 0
+    try {
+        $headers = @{ 'User-Agent' = 'SSF2-Event-Vault-Sync' }
+        $items = Invoke-RestMethod -Uri $ApiUrl -Headers $headers -ErrorAction Stop
+        foreach ($it in $items | Where-Object { $_.type -eq 'file' }) {
+            foreach ($folder in $folders) {
+                $outPath = Join-Path $folder $it.name
+                # If file exists and size matches GitHub's size, skip
+                try {
+                    $shouldDownload = $true
+                    if ((Test-Path $outPath) -and ($it.size -ne $null)) {
+                        try {
+                            $existingSize = (Get-Item $outPath).Length
+                            if ($existingSize -eq [int]$it.size) {
+                                $shouldDownload = $false
+                                $skipMsg = "Skipped $($it.name) in $folder (unchanged)"
+                                if ($LogTextBox) { try { $LogTextBox.AppendText("$skipMsg`r`n") } catch { } }
+                                elseif ($global:logTextBox) { try { $global:logTextBox.AppendText("$skipMsg`r`n") } catch { } }
+                                else { Write-Host $skipMsg }
+                                try { Add-Content -Path $logPath -Value "$(Get-Date): $skipMsg" } catch { }
+                            }
+                        } catch { }
+                    }
+
+                    if ($shouldDownload) {
+                        Invoke-WebRequest -Uri $it.download_url -OutFile $outPath -UseBasicParsing -ErrorAction Stop
+                        $downloaded++
+                        $msg = "Downloaded $($it.name) to $folder"
+                        if ($LogTextBox) {
+                            try { $LogTextBox.AppendText("$msg`r`n") } catch { }
+                        } elseif ($global:logTextBox) {
+                            try { $global:logTextBox.AppendText("$msg`r`n") } catch { }
+                        } else {
+                            Write-Host $msg
+                        }
+                        try { Add-Content -Path $logPath -Value "$(Get-Date): $msg" } catch { }
+                    }
+                } catch {
+                    $errMsg = "Failed to download $($it.name) to $folder" + ": $($_.Exception.Message)"
+                    if ($LogTextBox) {
+                        try { $LogTextBox.AppendText("$errMsg`r`n") } catch { }
+                    } elseif ($global:logTextBox) {
+                        try { $global:logTextBox.AppendText("$errMsg`r`n") } catch { }
+                    } else {
+                        Write-Host $errMsg
+                    }
+                    try { Add-Content -Path $logPath -Value "$(Get-Date): $errMsg" } catch { }
+                }
+            }
+        }
+        return $downloaded
+    } catch {
+        # If GitHub API fails, log and return 0
+        $err = $_.Exception.Message
+        $failMsg = "Sync-OnlineFiles failed: $err"
+        if ($LogTextBox) {
+            try { $LogTextBox.AppendText("$failMsg`r`n") } catch { }
+        } elseif ($global:logTextBox) {
+            try { $global:logTextBox.AppendText("$failMsg`r`n") } catch { }
+        } else {
+            Write-Host $failMsg
+        }
+        try { Add-Content -Path $logPath -Value "$(Get-Date): $failMsg" } catch { }
+        return 0
+    }
+}
+
+$syncedFiles = 0
+# Only sync now in console mode (GUI will sync after log textbox exists)
+if (-not $guiMode) {
+    $syncedFiles = Sync-OnlineFiles
+    # Report sync result to console and history.log
+    try {
+        if ($syncedFiles -eq 0) {
+            $msg = "No files added from online"
+        } elseif ($syncedFiles -eq 1) {
+            $msg = "1 file added from online"
+        } else {
+            $msg = "$syncedFiles files added from online"
+        }
+        try { Write-Host $msg } catch { }
+        try { Add-Content -Path (Join-Path $exeDir "history.log") -Value "$(Get-Date): $msg" } catch { }
+    } catch { }
+}
+
 function Start-Compilation {
     param (
         $LogTextBox = $null,
@@ -560,7 +658,7 @@ if ($guiMode) {
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "SSF2 Event Compiler"
-$form.Size = New-Object System.Drawing.Size(600, 500)
+$form.Size = New-Object System.Drawing.Size(600, 550)
 $form.StartPosition = "CenterScreen"
 
 # Set the form icon from the executable
@@ -631,6 +729,20 @@ $logTextBox.ScrollBars = "Vertical"
 $logTextBox.ReadOnly = $true
 $form.Controls.Add($logTextBox)
 
+# If running GUI, sync online files and report into the GUI log
+if ($guiMode) {
+    try {
+        $syncedFiles = Sync-OnlineFiles -LogTextBox $logTextBox
+    } catch { $syncedFiles = 0 }
+    try {
+        if ($syncedFiles -eq 0) { $msg = "No files added from online" }
+        elseif ($syncedFiles -eq 1) { $msg = "1 file added from online" }
+        else { $msg = "$syncedFiles files added from online" }
+        try { $logTextBox.AppendText("$msg`r`n") } catch { }
+        try { Add-Content -Path (Join-Path $exeDir "history.log") -Value "$(Get-Date): $msg" } catch { }
+    } catch { }
+}
+
 # Sort Panel (hidden by default)
 $sortPanel = New-Object System.Windows.Forms.Panel
 $sortPanel.Location = New-Object System.Drawing.Point(10, 10)
@@ -655,7 +767,7 @@ $form.Controls.Add($sortPanel)
 # Sort Button
 $sortButton = New-Object System.Windows.Forms.Button
 $sortButton.Text = "Sort"
-$sortButton.Location = New-Object System.Drawing.Point(480, 420)
+$sortButton.Location = New-Object System.Drawing.Point(480, 460)
 $sortButton.Size = New-Object System.Drawing.Size(80, 30)
 $form.Controls.Add($sortButton)
 
@@ -689,6 +801,13 @@ $cancelButton.Location = New-Object System.Drawing.Point(360, 420)
 $cancelButton.Size = New-Object System.Drawing.Size(100, 30)
 $cancelButton.Enabled = $false
 $form.Controls.Add($cancelButton)
+
+# Sync Online Button
+$syncButton = New-Object System.Windows.Forms.Button
+$syncButton.Text = "Sync Online"
+$syncButton.Location = New-Object System.Drawing.Point(480, 420)
+$syncButton.Size = New-Object System.Drawing.Size(100, 30)
+$form.Controls.Add($syncButton)
 
 # Global variable to track if compilation should be cancelled
 $script:cancelCompilation = $false
@@ -767,6 +886,23 @@ $cancelButton.Add_Click({
     $script:cancelCompilation = $true
     $logTextBox.AppendText("Cancelling compilation...`r`n")
     $cancelButton.Enabled = $false
+})
+
+# Event handler for sync online button
+$syncButton.Add_Click({
+    $syncButton.Enabled = $false
+    try {
+        $synced = Sync-OnlineFiles -LogTextBox $logTextBox
+        if ($synced -eq 0) { $msg = "No files added from online" }
+        elseif ($synced -eq 1) { $msg = "1 file added from online" }
+        else { $msg = "$synced files added from online" }
+        $logTextBox.AppendText("$msg`r`n")
+        try { Add-Content -Path (Join-Path $exeDir "history.log") -Value "$(Get-Date): $msg" } catch { }
+    } catch {
+        $logTextBox.AppendText("Sync failed: $($_.Exception.Message)`r`n")
+    } finally {
+        $syncButton.Enabled = $true
+    }
 })
 
 # Sort button handler: toggle selection UI

@@ -9,6 +9,8 @@ $existingProcesses = Get-Process | Where-Object {
     $_.Id -ne $PID 
 }
 
+ 
+
 # Terminate older instances
 foreach ($proc in $existingProcesses) {
     try {
@@ -21,74 +23,142 @@ foreach ($proc in $existingProcesses) {
 
 # Set the working directory to the base directory (parent of script's directory)
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$baseDir = Split-Path -Parent $scriptDir
-Set-Location $baseDir
 
-# Set the window title for this instance
-$host.UI.RawUI.WindowTitle = $scriptName
+# Immediate startup log for debug
+try {
+    $startupLog = Join-Path $scriptDir "history.log"
+    $entry = "$(Get-Date): Script started. PID=$PID, Args=$($args -join ' ')"
+    Add-Content -Path $startupLog -Value $entry
+} catch { }
 
-# Check for command line arguments
+# Argument parsing (console/GUI modes)
 $guiMode = $true
 $consoleLegacy = $false
 $silentMode = $false
+$listSort = $false
 $exePath = $null
-
 if ($args.Count -gt 0) {
-    # Check if first argument is a file path (exe path from launcher)
     if ($args[0] -match "\.exe$") {
         $exePath = $args[0]
-        $args = $args[1..($args.Count-1)]  # Remove exe path from args
+        if ($args.Count -gt 1) { $args = $args[1..($args.Count-1)] } else { $args = @() }
     }
-    
     if ($args.Count -gt 0) {
-        if ($args[0] -eq "console") {
-            $guiMode = $false
-            if ($args.Count -gt 1 -and $args[1] -eq "legacy") {
-                $consoleLegacy = $true
-            }
-        } elseif ($args[0] -eq "silent") {
-            $guiMode = $false
-            $silentMode = $true
+        switch ($args[0]) {
+            'console' { $guiMode = $false; if ($args.Count -gt 1 -and $args[1] -eq 'legacy') { $consoleLegacy = $true } }
+            'listsort' { $guiMode = $false; $listSort = $true }
+            'silent' { $guiMode = $false; $silentMode = $true }
         }
     }
 }
 
-if ($guiMode) {
-    # Load Windows Forms assembly
-    Add-Type -AssemblyName System.Windows.Forms
-    Add-Type -AssemblyName System.Drawing
-    
-    # Hide console window in GUI mode
-    Add-Type -Name Window -Namespace ConsoleApp -MemberDefinition '
-    [DllImport("kernel32.dll")]
-    public static extern IntPtr GetConsoleWindow();
-    [DllImport("user32.dll")]
-    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    '
-    $consolePtr = [ConsoleApp.Window]::GetConsoleWindow()
-    [ConsoleApp.Window]::ShowWindow($consolePtr, 0)  # 0 = SW_HIDE
-}
-
-$exeDir = $PSScriptRoot
-$flexHome = Join-Path $exeDir "../aflex_lite"
+# Set script/executable directories
+$exeDir = $scriptDir
+$flexHome = Join-Path $exeDir "..\aflex_lite"
 Set-Location $exeDir
 
-# Function to perform compilation (legacy mode)
 function Start-Compilation {
     param (
         $LogTextBox = $null,
         [bool]$ShowWarnings = $true,
-        [bool]$UseLegacy = $false
+        [bool]$UseLegacy = $false,
+        [string[]]$SelectedFiles = $null
     )
 
     $logMessage = "$(Get-Date): Starting compilation..."
-    if ($LogTextBox) {
-        $LogTextBox.AppendText("$logMessage`r`n")
-    } elseif (-not $silentMode) {
-        Write-Host $logMessage
+    if ($LogTextBox) { $LogTextBox.AppendText("$logMessage`r`n") } elseif (-not $silentMode) { Write-Host $logMessage }
+
+    if (!(Test-Path "../compile/images")) { New-Item -ItemType Directory -Path "../compile/images" | Out-Null }
+
+    # (log already opened earlier in this function)
+
+    $sourceDirs = if ($UseLegacy) { @("legacy") } else { @("files","online") }
+    $allFound = $sourceDirs | ForEach-Object { Get-ChildItem "$_\*.as" -ErrorAction SilentlyContinue } | Select-Object -ExpandProperty FullName
+
+    # Locate ExternalEvents and source event files
+    $externalEventsFile = $allFound | Where-Object { [System.IO.Path]::GetFileName($_) -ieq "ExternalEvents.as" }
+    $eventSourceFiles = $allFound | Where-Object { [System.IO.Path]::GetFileNameWithoutExtension($_) -ine "ExternalEvents" }
+
+    # Apply selection filter if provided (SelectedFiles contains basenames without extension)
+    if ($SelectedFiles -and $SelectedFiles.Count -gt 0) {
+        $sel = $SelectedFiles | ForEach-Object { $_ }
+        $eventSourceFiles = $eventSourceFiles | Where-Object { $sel -contains [System.IO.Path]::GetFileNameWithoutExtension($_) }
     }
 
-    # Directory setup
+    # Ensure ExternalEvents.as exists (create in files/ if missing)
+    if (-not $externalEventsFile) {
+        $externalEventsFile = Join-Path $exeDir "files\ExternalEvents.as"
+        if (-not (Test-Path $externalEventsFile)) {
+            $template = "package {`n    public class ExternalEvents {`n        public static var eventList2:Array = [];`n    }`n}`n"
+            Set-Content -Path $externalEventsFile -Value $template -Encoding UTF8
+        }
+    }
+
+    # Final list of files to compile: selected event sources + ExternalEvents.as
+    $asFiles = @()
+    if ($eventSourceFiles) { $asFiles += $eventSourceFiles }
+    if ($externalEventsFile) { $asFiles += $externalEventsFile }
+
+    if ($asFiles.Count -eq 0) {
+        $errorMsg = "No .as files found in source folders"
+        if ($LogTextBox) { $LogTextBox.AppendText("$errorMsg`r`n") } elseif (-not $silentMode) { Write-Host $errorMsg }
+        $log.WriteLine((Get-Date).ToString() + ": " + $errorMsg)
+        $log.WriteLine((Get-Date).ToString() + ": Compilation complete")
+        $log.Close()
+        return
+    }
+
+    # Helper: parse object-like string into key/value hashtable
+    function Parse-ObjectString($objStr) {
+        $props = @{}
+            $matches = [regex]::Matches($objStr, '"([^\"]+)":\s*(.+?)(?=,\s*"[^\"]+":|$)')
+        foreach ($m in $matches) {
+            $key = $m.Groups[1].Value
+            $value = $m.Groups[2].Value.Trim()
+            if ($key -ne "classAPI") { $value = $value.Trim('"') }
+            $props[$key] = $value
+        }
+        return $props
+    }
+
+    # Build event info list from chosen event source files
+    $allEventInfos = @()
+    foreach ($f in $eventSourceFiles) {
+        try {
+            $fileContent = Get-Content $f -Raw -ErrorAction SilentlyContinue
+            if ($fileContent -match 'eventinfo\s*:\s*Array\s*=\s*\[([^\]]*)\]') {
+                $infoStr = $matches[1]
+                $infoObj = $infoStr -replace '^\s*{\s*', '' -replace '\s*}\s*$', ''
+                $eventInfo = Parse-ObjectString $infoObj
+                if ($eventInfo -and $eventInfo.Count -gt 0) { $allEventInfos += $eventInfo }
+            }
+        } catch { }
+    }
+
+    # Update ExternalEvents.as only with the selected events
+    if ($externalEventsFile -and $allEventInfos.Count -gt 0) {
+        $content = Get-Content $externalEventsFile -Raw
+        $eventStrs = $allEventInfos | ForEach-Object {
+            $lines = @()
+            $keys = $_.Keys | Sort-Object
+            foreach ($key in $keys) {
+                $value = $_[$key]
+                if ($key -eq "classAPI") { $lines += "`"classAPI`":$value" } else { $lines += "`"$key`": `"$value`"" }
+            }
+            return "         {`n" + ($lines -join ",`n") + "`n         }"
+        }
+        $eventBlock = $eventStrs -join ",`n"
+        if ($content -match '(\beventList2\s*=\s*\[)[^\]]*(\];)') {
+            $content = $content -replace '(\beventList2\s*=\s*\[)[^\]]*(\];)', "`$1`n$eventBlock`n         `$2"
+        } else {
+            # Fallback: append an eventList2 block
+            $content += "`n    public static var eventList2:Array = [`n$eventBlock`n    ];`n"
+        }
+        Set-Content -Path $externalEventsFile -Value $content -Encoding UTF8
+        $msg = "Updated ExternalEvents.as with $($allEventInfos.Count) events from source files"
+        if ($LogTextBox) { $LogTextBox.AppendText("$msg`r`n") } elseif (-not $silentMode) { Write-Host $msg }
+    }
+
+    # Continue with determining main file and running mxmlc (rest of original function continues)
     if (!(Test-Path "../compile/images")) {
         New-Item -ItemType Directory -Path "../compile/images"
         $msg = "Created ../compile/images directory"
@@ -99,10 +169,10 @@ function Start-Compilation {
     $log = [System.IO.StreamWriter]::new($logPath, $true)
     $log.WriteLine((Get-Date).ToString() + ": Starting compilation")
 
-    $sourceDir = if ($UseLegacy) { "legacy" } else { "files" }
-    $asFiles = Get-ChildItem "$sourceDir\*.as" | Select-Object -ExpandProperty FullName
+    $sourceDirs = if ($UseLegacy) { @("legacy") } else { @("files","online") }
+    $asFiles = $sourceDirs | ForEach-Object { Get-ChildItem "$_\*.as" -ErrorAction SilentlyContinue } | Select-Object -ExpandProperty FullName
     if ($asFiles.Count -eq 0) {
-        $errorMsg = "No .as files found in $sourceDir folder"
+        $errorMsg = "No .as files found in source folders"
         if ($LogTextBox) { $LogTextBox.AppendText("$errorMsg`r`n") } elseif (-not $silentMode) { Write-Host $errorMsg }
         $log.WriteLine((Get-Date).ToString() + ": " + $errorMsg)
         $log.WriteLine((Get-Date).ToString() + ": Compilation complete")
@@ -125,155 +195,22 @@ function Start-Compilation {
         }
 
         # Process event files and update ExternalEvents.as
-        $externalEventsFile = $asFiles | Where-Object { [System.IO.Path]::GetFileName($_) -eq "ExternalEvents.as" }
-        if (!$externalEventsFile) {
-            $externalEventsFile = Join-Path (Join-Path $exeDir $sourceDir) "ExternalEvents.as"
-            $content = "package {`n"
-            $content += "    public class ExternalEvents {`n"
-            $content += "        public static var eventList2:Array = [];`n"
-            $content += "    }`n"
-            $content += "}`n"
-            Set-Content $externalEventsFile $content
-            $asFiles += $externalEventsFile
-        }
-        $content = Get-Content $externalEventsFile -Raw
-        # Note: We now always rebuild eventList2 from source files, ignoring existing content
+                # Determine main file and prepare mxmlc arguments
+                $mainFile = $asFiles | Where-Object { [System.IO.Path]::GetFileName($_) -ieq "ExternalEvents.as" } | Select-Object -First 1
+                if (-not $mainFile) { $asFiles = $asFiles | Sort-Object; $mainFile = $asFiles[0] }
+                $mainName = [System.IO.Path]::GetFileName($mainFile)
+                if ($mainFile -match "\\online\\") { $mainFolder = "online" } elseif ($mainFile -match "\\files\\") { $mainFolder = "files" } else { $mainFolder = "." }
+                $relativeMain = Join-Path $mainFolder $mainName
 
-        $allEventInfos = @()
-        foreach ($f in $asFiles) {
-            $filename = [System.IO.Path]::GetFileNameWithoutExtension($f)
-            if ($filename -eq "ExternalEvents") { continue }
-            $fileContent = Get-Content $f -Raw
-
-            # Parse eventinfo if present
-            $eventInfo = $null
-            if ($fileContent -match 'eventinfo\s*:\s*Array\s*=\s*\[([^\]]*)\]') {
-                $infoStr = $matches[1]
-                $infoObj = $infoStr -replace '^\s*{\s*', '' -replace '\s*}\s*$', ''
-                $eventInfo = Parse-ObjectString $infoObj
-            }
-
-            if ($eventInfo -and $eventInfo.Count -gt 0) {
-                $allEventInfos += $eventInfo
-            }
-
-            # Verify and update class and function names
-            $updatedContent = $fileContent
-            # Find public class
-            if ($fileContent -match 'public class (\w+)') {
-                $className = $matches[1]
-                if ($className -ne $filename) {
-                    $updatedContent = $updatedContent -replace "public class $className", "public class $filename"
-                }
-            }
-            # Find constructor (function that calls super(api))
-            if ($fileContent -match 'public function (\w+)\([^)]*\)\s*\{[^}]*super\(api\)[^}]*\}') {
-                $funcName = $matches[1]
-                if ($funcName -ne $filename) {
-                    $updatedContent = $updatedContent -replace "public function $funcName\(", "public function $filename("
-                }
-            }
-            if ($updatedContent -ne $fileContent) {
-                Set-Content $f $updatedContent
-                $msg = "Updated class/function names in $filename.as"
-                if ($LogTextBox) { $LogTextBox.AppendText("$msg`r`n") } elseif (-not $silentMode) { Write-Host $msg }
-            }
-        }
-
-        # Update ExternalEvents.as
-        if ($allEventInfos.Count -gt 0 -and $externalEventsFile) {
-            $content = Get-Content $externalEventsFile -Raw
-            $eventStrs = $allEventInfos | ForEach-Object {
-                $lines = @()
-                $keys = $_.Keys | Sort-Object
-                foreach ($key in $keys) {
-                    $value = $_[$key]
-                    if ($key -eq "classAPI") {
-                        $lines += "`"classAPI`":$value"
-                    } else {
-                        $lines += "`"$key`": `"$value`""
-                    }
-                }
-                "         {`n" + ($lines -join ",`n") + "`n         }"
-            }
-            $eventBlock = $eventStrs -join ",`n"
-            $content = $content -replace '(\beventList2\s*=\s*\[)[^\]]*(\];)', "`$1`n$eventBlock`n         `$2"
-            Set-Content $externalEventsFile $content
-            $msg = "Updated ExternalEvents.as with $($allEventInfos.Count) events from source files"
-            if ($LogTextBox) { $LogTextBox.AppendText("$msg`r`n") } elseif (-not $silentMode) { Write-Host $msg }
-        }
-
-        $mainFile = $null
-        foreach ($f in $asFiles) {
-            if ([System.IO.Path]::GetFileName($f) -eq "ExternalEvents.as") {
-                $mainFile = $f
-                break
-            }
-        }
-        if ($null -eq $mainFile) {
-            $asFiles = $asFiles | Sort-Object
-            $mainFile = $asFiles[0]
-        }
-        $relativeMain = "$sourceDir\" + [System.IO.Path]::GetFileName($mainFile)
-        $outputFile = "custom_events.swf"
-        $msg = "Found $($asFiles.Count) .as files"
-        if ($LogTextBox) { $LogTextBox.AppendText("$msg`r`n") } elseif (-not $silentMode) { Write-Host $msg }
-        $msg = "Main file: $([System.IO.Path]::GetFileName($mainFile))"
-        if ($LogTextBox) { $LogTextBox.AppendText("$msg`r`n") } elseif (-not $silentMode) { Write-Host $msg }
-        $log.WriteLine((Get-Date).ToString() + ": Found " + $asFiles.Count + " .as files")
-        $log.WriteLine((Get-Date).ToString() + ": Main file: " + [System.IO.Path]::GetFileName($mainFile))
-
-        # Build include-file arguments for images
-        $includeArgs = ""
-        $linkageNames = @()
-        if (Test-Path "../compile/images") {
-            $imageFiles = Get-ChildItem "../compile/images/*.*" | Where-Object { $_.Extension -match '\.(png|jpg|jpeg|gif|bmp|svg)' }
-            $msg = "Found $($imageFiles.Count) images to embed"
-            if ($LogTextBox) { $LogTextBox.AppendText("$msg`r`n") } elseif (-not $silentMode) { Write-Host $msg }
-            if ($imageFiles.Count -gt 0) {
+                $includeClasses = ""
                 $linkageNames = @()
-                foreach ($img in $imageFiles) {
-                    $linkageName = "img_" + [System.IO.Path]::GetFileNameWithoutExtension($img.Name).Replace(" ", "_").Replace("-", "_")
-                    $linkageNames += $linkageName
-                    $msg = "Creating MovieClip class for $($img.Name) as $linkageName"
-                    if ($LogTextBox) { $LogTextBox.AppendText("$msg`r`n") } elseif (-not $silentMode) { Write-Host $msg }
-                    $classContent = "package {`n"
-                    $classContent += "    [Embed(source=`"../images/$($img.Name)`")]`n"
-                    $classContent += "    public class $linkageName {`n"
-                    $classContent += "    }`n"
-                    $classContent += "}`n"
-                    $classPath = "$sourceDir\$linkageName.as"
-                    $classContent | Out-File -FilePath $classPath -Encoding UTF8
-                }
-                $msg = "Created $($imageFiles.Count) MovieClip classes for images"
-                if ($LogTextBox) { $LogTextBox.AppendText("$msg`r`n") } elseif (-not $silentMode) { Write-Host $msg }
-                $log.WriteLine((Get-Date).ToString() + ": Created " + $imageFiles.Count + " MovieClip classes for images")
-            }
-        } else {
-            $msg = "No images folder found"
-            if ($LogTextBox) { $LogTextBox.AppendText("$msg`r`n") } elseif (-not $silentMode) { Write-Host $msg }
-        }
 
-        $includeClasses = ""
-        if ($linkageNames) {
-            $includeClasses = "-includes=" + ($linkageNames -join ",")
-        }
+                $mxmlc = Join-Path $flexHome "bin\mxmlc.bat"
+                $warningsFlag = if ($ShowWarnings) { "true" } else { "false" }
+                $sourcePathArg = if ($UseLegacy) { "legacy,../compile/api" } else { "files,online,../compile/api" }
+                $arguments = "-warnings=$warningsFlag -strict=true -source-path=$sourcePathArg -library-path=../aflex_lite/frameworks/libs/player/32.0/playerglobal.swc $includeClasses `"$relativeMain`" -output=../custom_events.swf"
 
-        $mxmlc = Join-Path $flexHome "bin\mxmlc.bat"
-        $warningsFlag = if ($ShowWarnings) { "true" } else { "false" }
-        $arguments = "-warnings=$warningsFlag -strict=true -source-path=$sourceDir,../compile/api -library-path=../aflex_lite/frameworks/libs/player/32.0/playerglobal.swc $includeClasses ""$relativeMain"" -output=../custom_events.swf"
-
-        # Validate mxmlc exists
-        if (!(Test-Path $mxmlc)) {
-            $errorMsg = "mxmlc.bat not found at: $mxmlc"
-            if ($LogTextBox) { $LogTextBox.AppendText("$errorMsg`r`n") } elseif (-not $silentMode) { Write-Host $errorMsg }
-            $log.WriteLine((Get-Date).ToString() + ": " + $errorMsg)
-            $log.WriteLine((Get-Date).ToString() + ": Compilation complete")
-            $log.Close()
-            return
-        }
-
-        $msg = "Running mxmlc compilation..."
+                $msg = "Running mxmlc compilation..."
         if ($LogTextBox) { $LogTextBox.AppendText("$msg`r`n") } elseif (-not $silentMode) { Write-Host $msg }
         $msg = "Command: $mxmlc $arguments"
         if ($LogTextBox) { $LogTextBox.AppendText("$msg`r`n") } elseif (-not $silentMode) { Write-Host $msg }
@@ -556,7 +493,71 @@ if (!$guiMode) {
     }
 }
 
+# Prepare GUI event list and saved selections (used by Sort UI)
+# Build `$events` so the GUI has the same parsed list as `listsort`
+$selectedFile = Join-Path $exeDir "selected_events.txt"
+$savedSelected = @()
+if (Test-Path $selectedFile) {
+    try { 
+        $savedSelected = Get-Content -Path $selectedFile -ErrorAction SilentlyContinue | ForEach-Object { $_.Trim() } 
+        try { Add-Content -Path (Join-Path $exeDir "history.log") -Value "$(Get-Date): Loaded saved selections count=$($savedSelected.Count): $([string]::Join(',', $savedSelected))" } catch { }
+    } catch { $savedSelected = @() }
+}
+
+$events = @()
+$sourceDirs = @("files","online")
+foreach ($d in $sourceDirs) {
+    $dirPath = Join-Path $exeDir $d
+    try {
+        $files = Get-ChildItem -Path $dirPath -Filter *.as -File -ErrorAction SilentlyContinue
+    } catch { $files = @() }
+    foreach ($f in $files) {
+        if ($f.Name -ieq "ExternalEvents.as") { continue }
+        try {
+            $content = Get-Content -Path $f.FullName -Raw -ErrorAction SilentlyContinue
+            $name = ""
+            $desc = ""
+            $patternName = @'
+(?i)["']?name["']?\s*:\s*["']([^"']+)["']
+'@
+            $patternDesc = @'
+(?i)["']?description["']?\s*:\s*["']([^"']+)["']
+'@
+            $m = [regex]::Match($content, $patternName)
+            if ($m.Success) { $name = $m.Groups[1].Value.Trim() }
+            $m2 = [regex]::Match($content, $patternDesc)
+            if ($m2.Success) { $desc = $m2.Groups[1].Value.Trim() }
+            if (-not $name) { $name = [System.IO.Path]::GetFileNameWithoutExtension($f.Name) }
+            $events += [PSCustomObject]@{ Name = $name; Description = $desc; File = [System.IO.Path]::GetFileNameWithoutExtension($f.Name) }
+        } catch { }
+    }
+}
+
+# Debug log: GUI init and events count
+try {
+    $logPath = Join-Path $exeDir "history.log"
+    $msg = "$(Get-Date): GUI init - loaded savedSelected count=$($savedSelected.Count)"
+    Add-Content -Path $logPath -Value $msg
+    $msg2 = "$(Get-Date): GUI init - built events count=$($events.Count)"
+    Add-Content -Path $logPath -Value $msg2
+} catch { }
+
 # Create the GUI
+if ($guiMode) {
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+    Add-Type -Name Window -Namespace ConsoleApp -MemberDefinition '
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr GetConsoleWindow();
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    '
+    try {
+        $consolePtr = [ConsoleApp.Window]::GetConsoleWindow()
+        [ConsoleApp.Window]::ShowWindow($consolePtr, 0)  # 0 = SW_HIDE
+    } catch { }
+}
+
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "SSF2 Event Compiler"
 $form.Size = New-Object System.Drawing.Size(600, 500)
@@ -630,6 +631,34 @@ $logTextBox.ScrollBars = "Vertical"
 $logTextBox.ReadOnly = $true
 $form.Controls.Add($logTextBox)
 
+# Sort Panel (hidden by default)
+$sortPanel = New-Object System.Windows.Forms.Panel
+$sortPanel.Location = New-Object System.Drawing.Point(10, 10)
+$sortPanel.Size = New-Object System.Drawing.Size(560, 400)
+$sortPanel.Visible = $false
+
+$checkedListBox = New-Object System.Windows.Forms.CheckedListBox
+$checkedListBox.Location = New-Object System.Drawing.Point(0, 0)
+$checkedListBox.Size = New-Object System.Drawing.Size(560, 220)
+$checkedListBox.CheckOnClick = $true
+$sortPanel.Controls.Add($checkedListBox)
+
+$descriptionBox = New-Object System.Windows.Forms.TextBox
+$descriptionBox.Location = New-Object System.Drawing.Point(0, 225)
+$descriptionBox.Size = New-Object System.Drawing.Size(560, 170)
+$descriptionBox.Multiline = $true
+$descriptionBox.ReadOnly = $true
+$sortPanel.Controls.Add($descriptionBox)
+
+$form.Controls.Add($sortPanel)
+
+# Sort Button
+$sortButton = New-Object System.Windows.Forms.Button
+$sortButton.Text = "Sort"
+$sortButton.Location = New-Object System.Drawing.Point(480, 420)
+$sortButton.Size = New-Object System.Drawing.Size(80, 30)
+$form.Controls.Add($sortButton)
+
 # Compile Button
 $compileButton = New-Object System.Windows.Forms.Button
 $compileButton.Text = "Compile"
@@ -672,7 +701,53 @@ $compileButton.Add_Click({
     $logTextBox.Clear()
 
     try {
-        $success = Start-Compilation -LogTextBox $logTextBox -ShowWarnings $warningsCheckBox.Checked -UseLegacy $legacyCheckBox.Checked
+        if ($sortPanel.Visible) {
+            # Gather selected files from the checked list
+            $selected = @()
+            for ($i = 0; $i -lt $checkedListBox.Items.Count; $i++) {
+                if ($checkedListBox.GetItemChecked($i)) {
+                    $selected += $events[$i].File
+                }
+            }
+            # Persist selection
+            $selected | Out-File -FilePath $selectedFile -Encoding utf8
+            $logTextBox.AppendText("Compiling selected events: $($selected.Count)`r`n")
+
+            # Temporarily move unselected event .as files out of source folders so mxmlc only sees selected ones
+            $moved = @()
+            $tempDir = Join-Path $exeDir "disabled_events"
+            if (!(Test-Path $tempDir)) { New-Item -ItemType Directory -Path $tempDir | Out-Null }
+            try {
+                $allEventFiles = @()
+                $allEventFiles += (Get-ChildItem (Join-Path $exeDir "files") -Filter *.as -File -ErrorAction SilentlyContinue)
+                $allEventFiles += (Get-ChildItem (Join-Path $exeDir "online") -Filter *.as -File -ErrorAction SilentlyContinue)
+                foreach ($f in $allEventFiles) {
+                    if ([System.IO.Path]::GetFileName($f) -ieq "ExternalEvents.as") { continue }
+                    $base = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
+                    if ($base -notin $selected) {
+                        $dest = Join-Path $tempDir $f.Name
+                        Move-Item -Path $f.FullName -Destination $dest -Force
+                        $moved += @{ Src = $f.FullName; Dest = $dest }
+                    }
+                }
+
+                $success = Start-Compilation -LogTextBox $logTextBox -ShowWarnings $warningsCheckBox.Checked -UseLegacy $false -SelectedFiles $selected
+            } finally {
+                # Move files back
+                foreach ($rec in $moved) {
+                    try { Move-Item -Path $rec.Dest -Destination $rec.Src -Force } catch { }
+                }
+                # Clean up temp dir if empty
+                try { if ((Get-ChildItem $tempDir -Force -ErrorAction SilentlyContinue).Count -eq 0) { Remove-Item $tempDir -Force } } catch { }
+            }
+                # Return to log view
+                $sortPanel.Visible = $false
+                $logTextBox.Visible = $true
+                try { $sortButton.Text = "Sort" } catch { }
+            try { $sortButton.Text = "Sort" } catch { }
+        } else {
+            $success = Start-Compilation -LogTextBox $logTextBox -ShowWarnings $warningsCheckBox.Checked -UseLegacy $legacyCheckBox.Checked
+        }
         if ($success) {
             $logTextBox.AppendText("Compilation completed successfully!`r`n")
         }
@@ -692,6 +767,67 @@ $cancelButton.Add_Click({
     $script:cancelCompilation = $true
     $logTextBox.AppendText("Cancelling compilation...`r`n")
     $cancelButton.Enabled = $false
+})
+
+# Sort button handler: toggle selection UI
+$sortButton.Add_Click({
+    if ($sortPanel.Visible) {
+        # Close the sort panel and return to log view
+        # Save current checked selections
+        try {
+            $selectedToSave = @()
+            for ($j = 0; $j -lt $checkedListBox.Items.Count; $j++) {
+                if ($checkedListBox.GetItemChecked($j)) { $selectedToSave += $events[$j].File }
+            }
+            $selectedToSave | Out-File -FilePath $selectedFile -Encoding utf8
+            $savedSelected = $selectedToSave
+            try { Add-Content -Path (Join-Path $exeDir "history.log") -Value "$(Get-Date): Saved selections count=$($selectedToSave.Count): $([string]::Join(',', $selectedToSave))" } catch { }
+        } catch { 
+            try { Add-Content -Path (Join-Path $exeDir "history.log") -Value "$(Get-Date): Failed to save selections: $($_.Exception.Message)" } catch { }
+        }
+
+        $sortPanel.Visible = $false
+        $logTextBox.Visible = $true
+        $sortButton.Text = "Sort"
+        $descriptionBox.Text = ""
+    } else {
+        # Open the sort panel and populate list
+        $logTextBox.Visible = $false
+        $sortPanel.Visible = $true
+        # Reload saved selections from disk to reflect external changes or saves from other instances
+        try {
+            if (Test-Path $selectedFile) { $savedSelected = Get-Content -Path $selectedFile -ErrorAction SilentlyContinue | ForEach-Object { $_.Trim() } } else { $savedSelected = @() }
+            try { Add-Content -Path (Join-Path $exeDir "history.log") -Value "$(Get-Date): Reloaded saved selections count=$($savedSelected.Count): $([string]::Join(',', $savedSelected))" } catch { }
+        } catch { $savedSelected = @() }
+
+        $checkedListBox.Items.Clear()
+        for ($i = 0; $i -lt $events.Count; $i++) {
+            $item = $events[$i]
+            $checkedListBox.Items.Add($item.Name)
+            if ($item.File -in $savedSelected) { $checkedListBox.SetItemChecked($i, $true) }
+        }
+        try { Add-Content -Path (Join-Path $exeDir "history.log") -Value "$(Get-Date): Populated Sort list with $($events.Count) events; checked count=$((0..($checkedListBox.Items.Count-1) | Where-Object { $checkedListBox.GetItemChecked($_) }).Count)" } catch { }
+        $sortButton.Text = "Close"
+    }
+})
+
+# Show description when selection changes
+$checkedListBox.Add_SelectedIndexChanged({
+    $idx = $checkedListBox.SelectedIndex
+    if ($idx -ge 0 -and $idx -lt $events.Count) {
+        $descriptionBox.Text = $events[$idx].Description
+    }
+})
+
+# Show description on hover as well
+$checkedListBox.Add_MouseMove({ param($s,$e)
+    try {
+        $pt = New-Object System.Drawing.Point($e.X, $e.Y)
+        $idx = $checkedListBox.IndexFromPoint($pt)
+        if ($idx -ge 0 -and $idx -lt $events.Count) {
+            $descriptionBox.Text = $events[$idx].Description
+        }
+    } catch { }
 })
 
 # Show initial message

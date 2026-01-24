@@ -291,3 +291,134 @@
 1/21/2026 11:45:24 PM: Starting compilation
 1/21/2026 11:45:24 PM: No .as files found in compile\files folder
 1/21/2026 11:45:24 PM: Compilation complete
+1/23/2026 8:33:21 PM: Downloaded 1 files from online
+1/23/2026 8:33:21 PM: Starting compilation
+1/23/2026 8:33:21 PM: Found 7 .as files
+1/23/2026 8:33:21 PM: Main file: ExternalEvents.as
+1/23/2026 8:33:22 PM: Exit code: 1
+1/23/2026 8:33:22 PM: Compilation failed
+1/23/2026 8:43:11 PM: Downloaded 1 files from online
+1/23/2026 8:43:11 PM: Starting compilation
+1/23/2026 8:43:11 PM: Found 7 .as files
+1/23/2026 8:43:11 PM: Main file: ExternalEvents.as
+1/23/2026 8:43:12 PM: Exit code: 1
+1/23/2026 8:43:12 PM: Compilation failed
+1/23/2026 8:43:57 PM: Downloaded 1 files from online
+1/23/2026 8:43:57 PM: Starting compilation
+1/23/2026 8:43:57 PM: Found 7 .as files
+1/23/2026 8:43:57 PM: Main file: ExternalEvents.as
+1/23/2026 8:43:58 PM: Exit code: 1
+1/23/2026 8:43:58 PM: Compilation failed
+1/23/2026 8:44:17 PM: Downloaded 1 files from online
+1/23/2026 8:44:17 PM: Starting compilation
+1/23/2026 8:44:17 PM: Found 7 .as files
+1/23/2026 8:44:17 PM: Main file: ExternalEvents.as
+1/23/2026 8:44:20 PM: Exit code: 0
+1/23/2026 8:44:20 PM: Compilation complete
+1/23/2026 8:47:21 PM: Downloaded 1 files from online
+1/23/2026 8:47:21 PM: Starting compilation
+1/23/2026 8:47:21 PM: Found 7 .as files
+1/23/2026 8:47:21 PM: Main file: ExternalEvents.as
+1/23/2026 8:47:23 PM: Exit code: 0
+1/23/2026 8:47:23 PM: Compilation complete
+1/23/2026 8:47:36 PM: Downloaded 1 files from online
+1/23/2026 8:47:36 PM: Starting compilation
+1/23/2026 8:47:36 PM: Found 7 .as files
+1/23/2026 8:47:36 PM: Main file: ExternalEvents.as
+1/23/2026 8:47:38 PM: Exit code: 0
+1/23/2026 8:47:38 PM: Compilation complete
+1/23/2026 8:48:52 PM: Downloaded 1 files from online
+1/23/2026 8:48:52 PM: Starting compilation
+1/23/2026 8:48:52 PM: Found 7 .as files
+1/23/2026 8:48:52 PM: Main file: ExternalEvents.as
+1/23/2026 8:48:54 PM: Exit code: 0
+1/23/2026 8:48:54 PM: Compilation complete
+1/23/2026 8:50:10 PM: Downloaded 1 files from online
+1/23/2026 8:52:54 PM: Downloaded 1 files from online
+1/23/2026 9:02:49 PM: Starting compilation
+1/23/2026 9:02:49 PM: Starting compilation
+1/23/2026 9:02:49 PM: Failed to run compilation process: Exception calling "Start" with "0" argument(s): "Cannot start process because a file name has not been provided."
+1/23/2026 9:03:33 PM: Starting compilation
+1/23/2026 9:03:33 PM: Failed to run compilation process: Exception calling "Start" with "0" argument(s): "Cannot start process because a file name has not been provided."
+1/23/2026 9:04:11 PM: Starting compilation
+1/23/2026 9:04:13 PM: Exit code: 0
+1/23/2026 9:04:13 PM: Compilation complete
+01/23/2026 21:15:20: Script started. PID=36264, Args=
+01/23/2026 21:15:20: GUI init - loaded savedSelected count=1
+01/23/2026 21:15:20: GUI init - built events count=6
+1/23/2026 9:15:28 PM: Starting compilation
+1/23/2026 9:15:29 PM: Exit code: 0
+1/23/2026 9:15:29 PM: Compilation complete
+1/23/2026 9:16:06 PM: Starting compilation
+1/23/2026 9:16:08 PM: Exit code: 0
+1/23/2026 9:16:08 PM: Compilation complete
+01/23/2026 21:17:34: Script started. PID=9440, Args=C:\Users\glwex\Documents\GitHub\SSF2-Event-Vault\SSF2 Event Compiler.exe
+01/23/2026 21:17:34: GUI init - loaded savedSelected count=3
+01/23/2026 21:17:34: GUI init - built events count=5
+01/23/2026 21:22:11: Script started. PID=12840, Args=C:\Users\glwex\Documents\GitHub\SSF2-Event-Vault\SSF2 Event Compiler.exe
+01/23/2026 21:22:11: Sync-OnlineFiles failed: The remote server returned an error: (404) Not Found.
+01/23/2026 21:22:11: GUI init - loaded savedSelected count=3
+01/23/2026 21:22:11: GUI init - built events count=5
+01/23/2026 21:23:00: Script started. PID=38956, Args=
+01/23/2026 21:23:00: Sync-OnlineFiles failed: The remote server returned an error: (404) Not Found.
+01/23/2026 21:23:00: GUI init - loaded savedSelected count=3
+01/23/2026 21:23:00: GUI init - built events count=5
+01/23/2026 21:24:40: Script started. PID=29308, Args=console
+01/23/2026 21:24:41: Sync-OnlineFiles failed: The remote server returned an error: (404) Not Found.
+1/23/2026 9:24:41 PM: Starting compilation
+1/23/2026 9:24:43 PM: Exit code: 0
+1/23/2026 9:24:43 PM: Compilation complete
+01/23/2026 21:27:40: Script started. PID=5136, Args=console
+01/23/2026 21:27:52: Sync-OnlineFiles failed: The remote server returned an error: (404) Not Found.
+01/23/2026 21:27:59: Script started. PID=30064, Args=C:\Users\glwex\Documents\GitHub\SSF2-Event-Vault\SSF2 Event Compiler.exe
+01/23/2026 21:28:12: Sync-OnlineFiles failed: The remote server returned an error: (404) Not Found.
+01/23/2026 21:28:15: Sync-OnlineFiles (fallback) - downloaded=0 updated=0 skipped=0
+01/23/2026 21:28:16: GUI init - loaded savedSelected count=3
+01/23/2026 21:28:16: GUI init - built events count=5
+01/23/2026 21:28:41: Script started. PID=27520, Args=C:\Users\glwex\Documents\GitHub\SSF2-Event-Vault\SSF2 Event Compiler.exe
+01/23/2026 21:28:45: Script started. PID=40280, Args=C:\Users\glwex\Documents\GitHub\SSF2-Event-Vault\SSF2 Event Compiler.exe
+01/23/2026 21:28:49: Script started. PID=42356, Args=console
+01/23/2026 21:28:54: Sync-OnlineFiles failed: The remote server returned an error: (404) Not Found.
+01/23/2026 21:28:56: Sync-OnlineFiles (fallback) - downloaded=0 updated=0 skipped=0
+01/23/2026 21:28:56: GUI init - loaded savedSelected count=3
+01/23/2026 21:28:56: GUI init - built events count=5
+01/23/2026 21:28:58: Sync-OnlineFiles failed: The remote server returned an error: (404) Not Found.
+01/23/2026 21:28:59: Sync-OnlineFiles (fallback) - downloaded=0 updated=0 skipped=0
+01/23/2026 21:28:59: GUI init - loaded savedSelected count=3
+01/23/2026 21:28:59: GUI init - built events count=5
+01/23/2026 21:29:01: Sync-OnlineFiles failed: The remote server returned an error: (404) Not Found.
+01/23/2026 21:29:04: Sync-OnlineFiles (fallback) - downloaded=0 updated=0 skipped=0
+1/23/2026 9:29:04 PM: Starting compilation
+1/23/2026 9:29:06 PM: Exit code: 0
+1/23/2026 9:29:06 PM: Compilation complete
+01/23/2026 21:29:24: Script started. PID=40432, Args=C:\Users\glwex\Documents\GitHub\SSF2-Event-Vault\SSF2 Event Compiler.exe
+01/23/2026 21:29:24: GUI init - loaded savedSelected count=3
+01/23/2026 21:29:24: GUI init - built events count=5
+01/23/2026 21:31:50: Script started. PID=12540, Args=C:\Users\glwex\Documents\GitHub\SSF2-Event-Vault\SSF2 Event Compiler.exe
+01/23/2026 21:31:50: GUI init - loaded savedSelected count=3
+01/23/2026 21:31:50: GUI init - built events count=5
+01/23/2026 21:34:17: Script started. PID=16552, Args=C:\Users\glwex\Documents\GitHub\SSF2-Event-Vault\SSF2 Event Compiler.exe
+01/23/2026 21:34:17: GUI init - loaded savedSelected count=1
+01/23/2026 21:34:17: GUI init - built events count=5
+01/23/2026 21:35:41: Script started. PID=32640, Args=C:\Users\glwex\Documents\GitHub\SSF2-Event-Vault\SSF2 Event Compiler.exe
+01/23/2026 21:35:41: Loaded saved selections count=2: EventMode53MasterofHands,EventMode55_TheDevilWithin
+01/23/2026 21:35:41: GUI init - loaded savedSelected count=2
+01/23/2026 21:35:41: GUI init - built events count=5
+01/23/2026 21:36:01: Script started. PID=42044, Args=C:\Users\glwex\Documents\GitHub\SSF2-Event-Vault\SSF2 Event Compiler.exe
+01/23/2026 21:36:01: Loaded saved selections count=2: EventMode53MasterofHands,EventMode55_TheDevilWithin
+01/23/2026 21:36:01: GUI init - loaded savedSelected count=2
+01/23/2026 21:36:01: GUI init - built events count=5
+01/23/2026 21:36:03: Populated Sort list with 5 events; checked count=2
+01/23/2026 21:36:06: Saved selections count=1: EventMode53MasterofHands
+01/23/2026 21:36:07: Populated Sort list with 5 events; checked count=2
+01/23/2026 21:36:13: Saved selections count=3: EventMode53MasterofHands,EventMode55_TheDevilWithin,EventModeTemplate_BossBattle
+01/23/2026 21:36:14: Populated Sort list with 5 events; checked count=2
+01/23/2026 21:38:20: Script started. PID=30896, Args=C:\Users\glwex\Documents\GitHub\SSF2-Event-Vault\SSF2 Event Compiler.exe
+01/23/2026 21:38:20: Loaded saved selections count=3: EventMode53MasterofHands,EventMode55_TheDevilWithin,EventModeTemplate_BossBattle
+01/23/2026 21:38:20: GUI init - loaded savedSelected count=3
+01/23/2026 21:38:20: GUI init - built events count=5
+01/23/2026 21:38:22: Reloaded saved selections count=3: EventMode53MasterofHands,EventMode55_TheDevilWithin,EventModeTemplate_BossBattle
+01/23/2026 21:38:22: Populated Sort list with 5 events; checked count=3
+01/23/2026 21:38:24: Saved selections count=2: EventMode53MasterofHands,EventMode55_TheDevilWithin
+01/23/2026 21:38:25: Reloaded saved selections count=2: EventMode53MasterofHands,EventMode55_TheDevilWithin
+01/23/2026 21:38:25: Populated Sort list with 5 events; checked count=2

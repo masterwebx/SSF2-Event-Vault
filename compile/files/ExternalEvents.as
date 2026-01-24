@@ -42,18 +42,15 @@ package
 "description": "Fight against a powerful boss! Customize the boss and win conditions.",
 "id": "BossBattleTemplate",
 "name": "Boss Battle Template"
-         },
-         {
-"classAPI":EventMode53MasterofHands,
-"description": "*help* H I I I I I I I I *this is actually fun*",
-"id": "MasterofHands",
-"name": "53. Master of Hands"
          }
          ];            
 
         }
     }
 }
+
+
+
 
 
 

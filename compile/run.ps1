@@ -205,19 +205,6 @@ function Start-Compilation {
         return
     }
 
-    # Helper: parse object-like string into key/value hashtable
-    function Parse-ObjectString($objStr) {
-        $props = @{}
-            $matches = [regex]::Matches($objStr, '"([^\"]+)":\s*(.+?)(?=,\s*"[^\"]+":|$)')
-        foreach ($m in $matches) {
-            $key = $m.Groups[1].Value
-            $value = $m.Groups[2].Value.Trim()
-            if ($key -ne "classAPI") { $value = $value.Trim('"') }
-            $props[$key] = $value
-        }
-        return $props
-    }
-
     # Build event info list from chosen event source files
     $allEventInfos = @()
     foreach ($f in $eventSourceFiles) {
@@ -277,17 +264,17 @@ function Start-Compilation {
         $log.Close()
         return
     } else {
-        # Function to parse object string
         function Parse-ObjectString($objStr) {
             $props = @{}
-            $matches = [regex]::Matches($objStr, '"([^"]+)":\s*(.+?)(?=,\s*"[^"]+":|$)')
+            $matches = [regex]::Matches($objStr, '"([^"]+)":\s*"([^"]*)"(?=,)')
             foreach ($m in $matches) {
                 $key = $m.Groups[1].Value
-                $value = $m.Groups[2].Value.Trim()
-                if ($key -ne "classAPI") {
-                    $value = $value.Trim('"')
-                }
+                $value = $m.Groups[2].Value
                 $props[$key] = $value
+            }
+            # Handle classAPI separately (no quotes)
+            if ($objStr -match '"classAPI":\s*([^,]+)') {
+                $props["classAPI"] = $matches[1].Trim()
             }
             return $props
         }
@@ -357,8 +344,15 @@ function Start-Compilation {
                         $elapsed = [math]::Round(((Get-Date) - $startTime).TotalSeconds)
                         $statusMsg = "Compiling... (${elapsed}s elapsed)"
                         if ($LogTextBox) { 
-                            $LogTextBox.Lines[$LogTextBox.Lines.Length - 1] = $statusMsg
-                            $LogTextBox.Refresh()
+                            # Update last line in WPF TextBox
+                            $lines = $LogTextBox.Text -split "`r`n"
+                            if ($lines.Length -gt 0) {
+                                $lines[$lines.Length - 1] = $statusMsg
+                                $LogTextBox.Text = $lines -join "`r`n"
+                            } else {
+                                $LogTextBox.Text = $statusMsg
+                            }
+                            $LogTextBox.ScrollToEnd()
                         }
                         $lastUpdate = Get-Date
                     }
@@ -407,7 +401,7 @@ function Start-Compilation {
                             
                             # Auto-disable warnings if too many (20+ warnings)
                             if ($warningCount -ge 20 -and $LogTextBox) {
-                                $warningsCheckBox.Checked = $false
+                                $warningsCheckBox.IsChecked = $false
                                 $LogTextBox.AppendText("WARNING: Too many warnings detected. Warning display disabled to prevent GUI freezing.`r`n")
                                 $LogTextBox.AppendText("Uncheck 'Show Warnings' to re-enable or check it to show warnings again.`r`n")
                             }
@@ -467,8 +461,8 @@ function Start-Compilation {
                                 $warningsSuppressed++
                                 
                                 # Auto-disable warnings if too many (20+ warnings)
-                                if ($warningCount -ge 20 -and $LogTextBox -and $warningsCheckBox.Checked) {
-                                    $warningsCheckBox.Checked = $false
+                                if ($warningCount -ge 20 -and $LogTextBox -and $warningsCheckBox.IsChecked) {
+                                    $warningsCheckBox.IsChecked = $false
                                     $LogTextBox.AppendText("WARNING: Too many warnings detected. Warning display disabled to prevent GUI freezing.`r`n")
                                     $LogTextBox.AppendText("Uncheck 'Show Warnings' to re-enable or check it to show warnings again.`r`n")
                                 }
@@ -591,6 +585,22 @@ if (!$guiMode) {
     }
 }
 
+# Helper: parse object-like string into key/value hashtable
+function Parse-ObjectString($objStr) {
+    $props = @{}
+    $matches = [regex]::Matches($objStr, '"([^"]+)":\s*"([^"]*)"(?=,)')
+    foreach ($m in $matches) {
+        $key = $m.Groups[1].Value
+        $value = $m.Groups[2].Value
+        $props[$key] = $value
+    }
+    # Handle classAPI separately (no quotes)
+    if ($objStr -match '"classAPI":\s*([^,]+)') {
+        $props["classAPI"] = $matches[1].Trim()
+    }
+    return $props
+}
+
 # Prepare GUI event list and saved selections (used by Sort UI)
 # Build `$events` so the GUI has the same parsed list as `listsort`
 $selectedFile = Join-Path $exeDir "selected_events.txt"
@@ -612,21 +622,20 @@ foreach ($d in $sourceDirs) {
     foreach ($f in $files) {
         if ($f.Name -ieq "ExternalEvents.as") { continue }
         try {
-            $content = Get-Content -Path $f.FullName -Raw -ErrorAction SilentlyContinue
-            $name = ""
-            $desc = ""
-            $patternName = @'
-(?i)["']?name["']?\s*:\s*["']([^"']+)["']
-'@
-            $patternDesc = @'
-(?i)["']?description["']?\s*:\s*["']([^"']+)["']
-'@
-            $m = [regex]::Match($content, $patternName)
-            if ($m.Success) { $name = $m.Groups[1].Value.Trim() }
-            $m2 = [regex]::Match($content, $patternDesc)
-            if ($m2.Success) { $desc = $m2.Groups[1].Value.Trim() }
-            if (-not $name) { $name = [System.IO.Path]::GetFileNameWithoutExtension($f.Name) }
-            $events += [PSCustomObject]@{ Name = $name; Description = $desc; File = [System.IO.Path]::GetFileNameWithoutExtension($f.Name) }
+            $fileContent = Get-Content $f.FullName -Raw -ErrorAction SilentlyContinue
+            if ($fileContent -match 'eventinfo\s*:\s*Array\s*=\s*\[([^\]]*)\]') {
+                $infoStr = $matches[1]
+                $infoObj = $infoStr -replace '^\s*{\s*', '' -replace '\s*}\s*$', ''
+                $eventInfo = Parse-ObjectString $infoObj
+                if ($eventInfo) {
+                    $event = [PSCustomObject]@{
+                        Name = $eventInfo.name
+                        Description = $eventInfo.description
+                        File = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
+                    }
+                    $events += $event
+                }
+            }
         } catch { }
     }
 }
@@ -642,7 +651,7 @@ try {
 
 # Create the GUI
 if ($guiMode) {
-    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Xaml, System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
     Add-Type -Name Window -Namespace ConsoleApp -MemberDefinition '
     [DllImport("kernel32.dll")]
@@ -656,10 +665,30 @@ if ($guiMode) {
     } catch { }
 }
 
-$form = New-Object System.Windows.Forms.Form
-$form.Text = "SSF2 Event Compiler"
-$form.Size = New-Object System.Drawing.Size(600, 550)
-$form.StartPosition = "CenterScreen"
+$window = New-Object System.Windows.Window
+$window.Title = "SSF2 Event Compiler"
+$window.Width = 900
+$window.Height = 550
+$window.WindowStartupLocation = "CenterScreen"
+
+$grid = New-Object System.Windows.Controls.Grid
+$window.Content = $grid
+
+# Define columns
+$column1 = New-Object System.Windows.Controls.ColumnDefinition
+$column1.Width = "1*"
+$grid.ColumnDefinitions.Add($column1)
+$column2 = New-Object System.Windows.Controls.ColumnDefinition
+$column2.Width = "1*"
+$grid.ColumnDefinitions.Add($column2)
+
+# Define rows
+$row1 = New-Object System.Windows.Controls.RowDefinition
+$row1.Height = "1*"
+$grid.RowDefinitions.Add($row1)
+$row2 = New-Object System.Windows.Controls.RowDefinition
+$row2.Height = "Auto"
+$grid.RowDefinitions.Add($row2)
 
 # Set the form icon from the executable
 try {
@@ -692,8 +721,8 @@ try {
     # Ignore icon errors - will use default
 }
 
-# Handle form closing to ensure proper cleanup
-$form.Add_FormClosing({
+# Handle window closing to ensure proper cleanup
+$window.Add_Closing({
     param($sender, $e)
     
     # Restore console window
@@ -721,13 +750,16 @@ $form.Add_FormClosing({
 })
 
 # Log TextBox
-$logTextBox = New-Object System.Windows.Forms.TextBox
-$logTextBox.Location = New-Object System.Drawing.Point(10, 10)
-$logTextBox.Size = New-Object System.Drawing.Size(560, 400)
-$logTextBox.Multiline = $true
-$logTextBox.ScrollBars = "Vertical"
-$logTextBox.ReadOnly = $true
-$form.Controls.Add($logTextBox)
+$logTextBox = New-Object System.Windows.Controls.TextBox
+[System.Windows.Controls.Grid]::SetColumn($logTextBox, 0)
+[System.Windows.Controls.Grid]::SetRow($logTextBox, 0)
+$logTextBox.Width = 430
+$logTextBox.Height = 440
+$logTextBox.IsReadOnly = $true
+$logTextBox.TextWrapping = "Wrap"
+$logTextBox.VerticalScrollBarVisibility = "Visible"
+$logTextBox.Margin = "10,10,10,10"
+$grid.Children.Add($logTextBox)
 
 # If running GUI, sync online files and report into the GUI log
 if ($guiMode) {
@@ -743,94 +775,209 @@ if ($guiMode) {
     } catch { }
 }
 
-# Sort Panel (hidden by default)
-$sortPanel = New-Object System.Windows.Forms.Panel
-$sortPanel.Location = New-Object System.Drawing.Point(10, 10)
-$sortPanel.Size = New-Object System.Drawing.Size(560, 400)
-$sortPanel.Visible = $false
+# Sort Panel (always visible)
+$sortPanel = New-Object System.Windows.Controls.Canvas
+[System.Windows.Controls.Grid]::SetColumn($sortPanel, 1)
+[System.Windows.Controls.Grid]::SetRow($sortPanel, 0)
+$sortPanel.Width = 430
+$sortPanel.Height = 440
+$sortPanel.Margin = "10,10,10,10"
+$grid.Children.Add($sortPanel)
 
-$checkedListBox = New-Object System.Windows.Forms.CheckedListBox
-$checkedListBox.Location = New-Object System.Drawing.Point(0, 0)
-$checkedListBox.Size = New-Object System.Drawing.Size(560, 220)
-$checkedListBox.CheckOnClick = $true
-$sortPanel.Controls.Add($checkedListBox)
+# Button Panel
+$buttonPanel = New-Object System.Windows.Controls.Canvas
+[System.Windows.Controls.Grid]::SetColumn($buttonPanel, 0)
+[System.Windows.Controls.Grid]::SetRow($buttonPanel, 1)
+[System.Windows.Controls.Grid]::SetColumnSpan($buttonPanel, 2)
+$buttonPanel.Height = 50
+$buttonPanel.Margin = "10,0,10,10"
+$grid.Children.Add($buttonPanel)
 
-$descriptionBox = New-Object System.Windows.Forms.TextBox
-$descriptionBox.Location = New-Object System.Drawing.Point(0, 225)
-$descriptionBox.Size = New-Object System.Drawing.Size(560, 170)
-$descriptionBox.Multiline = $true
-$descriptionBox.ReadOnly = $true
-$sortPanel.Controls.Add($descriptionBox)
+$scrollViewer = New-Object System.Windows.Controls.ScrollViewer
+[System.Windows.Controls.Canvas]::SetLeft($scrollViewer, 0)
+[System.Windows.Controls.Canvas]::SetTop($scrollViewer, 0)
+$scrollViewer.Width = 430
+$scrollViewer.Height = 220
+$scrollViewer.VerticalScrollBarVisibility = "Auto"
+$scrollViewer.HorizontalScrollBarVisibility = "Disabled"
+$sortPanel.Children.Add($scrollViewer)
 
-$form.Controls.Add($sortPanel)
+$stackPanel = New-Object System.Windows.Controls.StackPanel
+$scrollViewer.Content = $stackPanel
 
-# Sort Button
-$sortButton = New-Object System.Windows.Forms.Button
-$sortButton.Text = "Sort"
-$sortButton.Location = New-Object System.Drawing.Point(480, 460)
-$sortButton.Size = New-Object System.Drawing.Size(80, 30)
-$form.Controls.Add($sortButton)
+$checkBoxes = @()
+
+$checkBoxes = @()
+
+# Populate the sort list
+for ($i = 0; $i -lt $events.Count; $i++) {
+    $item = $events[$i]
+    $checkBox = New-Object System.Windows.Controls.CheckBox
+    $checkBox.Content = $item.Name
+    $checkBox.Tag = $item.File
+    if ($item.File -in $savedSelected) { $checkBox.IsChecked = $true }
+    $stackPanel.Children.Add($checkBox)
+    $checkBoxes += $checkBox
+    # Add hover to show description
+    $checkBox.Add_MouseEnter({
+        $sender = $args[0]
+        $index = $checkBoxes.IndexOf($sender)
+        if ($index -ge 0) {
+            $descriptionBox.Text = $events[$index].Description
+        }
+    })
+}
+try { Add-Content -Path (Join-Path $exeDir "history.log") -Value "$(Get-Date): Populated Sort list with $($events.Count) events; checked count=$($checkBoxes | Where-Object { $_.IsChecked } | Measure-Object).Count" } catch { }
+
+# Add event handlers to checkboxes
+for ($i = 0; $i -lt $checkBoxes.Count; $i++) {
+    $cb = $checkBoxes[$i]
+    $eventIndex = $i  # capture
+    $cb.Add_Checked({
+        $descriptionBox.Text = $events[$eventIndex].Description
+        $checkedCount = ($checkBoxes | Where-Object { $_.IsChecked } | Measure-Object).Count
+        if ($checkedCount -eq $checkBoxes.Count) {
+            $selectAllButton.Content = "Deselect All"
+        } else {
+            $selectAllButton.Content = "Select All"
+        }
+    })
+    $cb.Add_Unchecked({
+        $checkedCount = ($checkBoxes | Where-Object { $_.IsChecked } | Measure-Object).Count
+        if ($checkedCount -eq $checkBoxes.Count) {
+            $selectAllButton.Content = "Deselect All"
+        } else {
+            $selectAllButton.Content = "Select All"
+        }
+    })
+}
+
+$descriptionBox = New-Object System.Windows.Controls.TextBox
+[System.Windows.Controls.Canvas]::SetLeft($descriptionBox, 0)
+[System.Windows.Controls.Canvas]::SetTop($descriptionBox, 225)
+$descriptionBox.Width = 430
+$descriptionBox.Height = 170
+$descriptionBox.IsReadOnly = $true
+$descriptionBox.TextWrapping = "Wrap"
+$descriptionBox.VerticalScrollBarVisibility = "Visible"
+$sortPanel.Children.Add($descriptionBox)
+
+# Select All Button
+$selectAllButton = New-Object System.Windows.Controls.Button
+$selectAllButton.Content = "Select All"
+[System.Windows.Controls.Canvas]::SetLeft($selectAllButton, 0)
+[System.Windows.Controls.Canvas]::SetTop($selectAllButton, 400)
+$selectAllButton.Width = 100
+$selectAllButton.Height = 30
+$sortPanel.Children.Add($selectAllButton)
+
+$selectAllButton.Add_MouseEnter({ param($sender, $e) $sender.Background = [System.Windows.Media.Brushes]::Yellow })
+$selectAllButton.Add_MouseLeave({ param($sender, $e) $sender.Background = [System.Windows.Media.Brushes]::LightGray })
+
+# Set initial button text based on current selection
+$checkedCount = ($checkBoxes | Where-Object { $_.IsChecked } | Measure-Object).Count
+if ($checkedCount -eq $checkBoxes.Count) {
+    $selectAllButton.Content = "Deselect All"
+} else {
+    $selectAllButton.Content = "Select All"
+}
+
+$selectAllButton.Add_Click({
+    if ($selectAllButton.Content -eq "Select All") {
+        foreach ($cb in $checkBoxes) { $cb.IsChecked = $true }
+        $selectAllButton.Content = "Deselect All"
+    } else {
+        foreach ($cb in $checkBoxes) { $cb.IsChecked = $false }
+        $selectAllButton.Content = "Select All"
+    }
+})
 
 # Compile Button
-$compileButton = New-Object System.Windows.Forms.Button
-$compileButton.Text = "Compile"
-$compileButton.Location = New-Object System.Drawing.Point(10, 420)
-$compileButton.Size = New-Object System.Drawing.Size(100, 30)
-$form.Controls.Add($compileButton)
+$compileButton = New-Object System.Windows.Controls.Button
+$compileButton.Content = "Compile"
+[System.Windows.Controls.Canvas]::SetLeft($compileButton, 10)
+[System.Windows.Controls.Canvas]::SetTop($compileButton, 10)
+$compileButton.Width = 100
+$compileButton.Height = 30
+$buttonPanel.Children.Add($compileButton)
 
-# Warnings Checkbox
-$warningsCheckBox = New-Object System.Windows.Forms.CheckBox
-$warningsCheckBox.Text = "Show Warnings"
-$warningsCheckBox.Location = New-Object System.Drawing.Point(120, 425)
-$warningsCheckBox.Size = New-Object System.Drawing.Size(120, 20)
-$warningsCheckBox.Checked = $false
-$form.Controls.Add($warningsCheckBox)
+$compileButton.Add_MouseEnter({ param($sender, $e) $sender.Background = [System.Windows.Media.Brushes]::Yellow })
+$compileButton.Add_MouseLeave({ param($sender, $e) $sender.Background = [System.Windows.Media.Brushes]::LightGray })
 
-# Legacy Checkbox
-$legacyCheckBox = New-Object System.Windows.Forms.CheckBox
-$legacyCheckBox.Text = "Legacy Mode"
-$legacyCheckBox.Location = New-Object System.Drawing.Point(250, 425)
-$legacyCheckBox.Size = New-Object System.Drawing.Size(100, 20)
-$legacyCheckBox.Checked = $false
-$form.Controls.Add($legacyCheckBox)
+# Warnings Toggle
+$warningsCheckBox = New-Object System.Windows.Controls.CheckBox
+$warningsCheckBox.Content = "Show Warnings"
+[System.Windows.Controls.Canvas]::SetLeft($warningsCheckBox, 120)
+[System.Windows.Controls.Canvas]::SetTop($warningsCheckBox, 15)
+$warningsCheckBox.Width = 120
+$buttonPanel.Children.Add($warningsCheckBox)
+$warningsCheckBox.Height = 20
+$warningsCheckBox.IsChecked = $false
+
+# Legacy Toggle
+$legacyCheckBox = New-Object System.Windows.Controls.CheckBox
+$legacyCheckBox.Content = "Legacy Mode"
+[System.Windows.Controls.Canvas]::SetLeft($legacyCheckBox, 250)
+[System.Windows.Controls.Canvas]::SetTop($legacyCheckBox, 15)
+$legacyCheckBox.Width = 100
+$legacyCheckBox.Height = 20
+$legacyCheckBox.IsChecked = $false
+$buttonPanel.Children.Add($legacyCheckBox)
+
+# Apply initial theme
+#Set-Theme $theme
 
 # Cancel Button
-$cancelButton = New-Object System.Windows.Forms.Button
-$cancelButton.Text = "Cancel"
-$cancelButton.Location = New-Object System.Drawing.Point(360, 420)
-$cancelButton.Size = New-Object System.Drawing.Size(100, 30)
-$cancelButton.Enabled = $false
-$form.Controls.Add($cancelButton)
+$cancelButton = New-Object System.Windows.Controls.Button
+$cancelButton.Content = "Cancel"
+[System.Windows.Controls.Canvas]::SetLeft($cancelButton, 360)
+[System.Windows.Controls.Canvas]::SetTop($cancelButton, 10)
+$cancelButton.Width = 100
+$cancelButton.Height = 30
+$cancelButton.IsEnabled = $false
+$buttonPanel.Children.Add($cancelButton)
+
+$cancelButton.Add_MouseEnter({ param($sender, $e) $sender.Background = [System.Windows.Media.Brushes]::Yellow })
+$cancelButton.Add_MouseLeave({ param($sender, $e) $sender.Background = [System.Windows.Media.Brushes]::LightGray })
 
 # Sync Online Button
-$syncButton = New-Object System.Windows.Forms.Button
-$syncButton.Text = "Sync Online"
-$syncButton.Location = New-Object System.Drawing.Point(480, 420)
-$syncButton.Size = New-Object System.Drawing.Size(100, 30)
-$form.Controls.Add($syncButton)
+$syncButton = New-Object System.Windows.Controls.Button
+$syncButton.Content = "Download new events"
+[System.Windows.Controls.Canvas]::SetLeft($syncButton, 470)
+[System.Windows.Controls.Canvas]::SetTop($syncButton, 10)
+$syncButton.Width = 120
+$syncButton.Height = 30
+$buttonPanel.Children.Add($syncButton)
+
+$syncButton.Add_MouseEnter({ param($sender, $e) $sender.Background = [System.Windows.Media.Brushes]::Yellow })
+$syncButton.Add_MouseLeave({ param($sender, $e) $sender.Background = [System.Windows.Media.Brushes]::LightGray })
 
 # Global variable to track if compilation should be cancelled
 $script:cancelCompilation = $false
 
 # Event handler for compile button
 $compileButton.Add_Click({
-    $compileButton.Enabled = $false
-    $cancelButton.Enabled = $true
+    $compileButton.IsEnabled = $false
+    $cancelButton.IsEnabled = $true
     $script:cancelCompilation = $false
     $logTextBox.Clear()
 
     try {
-        if ($sortPanel.Visible) {
+        if ($sortPanel.Visibility -eq "Visible") {
             # Gather selected files from the checked list
             $selected = @()
-            for ($i = 0; $i -lt $checkedListBox.Items.Count; $i++) {
-                if ($checkedListBox.GetItemChecked($i)) {
-                    $selected += $events[$i].File
+            foreach ($cb in $checkBoxes) {
+                if ($cb.IsChecked) {
+                    $selected += $cb.Tag
                 }
             }
             # Persist selection
             $selected | Out-File -FilePath $selectedFile -Encoding utf8
-            $logTextBox.AppendText("Compiling selected events: $($selected.Count)`r`n")
+            if ([bool]$legacyCheckBox.IsChecked) {
+                $logTextBox.AppendText("Compiling from legacy folder`r`n")
+            } else {
+                $logTextBox.AppendText("Compiling selected events: $($selected.Count)`r`n")
+            }
 
             # Temporarily move unselected event .as files out of source folders so mxmlc only sees selected ones
             $moved = @()
@@ -850,7 +997,7 @@ $compileButton.Add_Click({
                     }
                 }
 
-                $success = Start-Compilation -LogTextBox $logTextBox -ShowWarnings $warningsCheckBox.Checked -UseLegacy $false -SelectedFiles $selected
+                $success = Start-Compilation -LogTextBox $logTextBox -ShowWarnings ([bool]$warningsCheckBox.IsChecked) -UseLegacy ([bool]$legacyCheckBox.IsChecked) -SelectedFiles $selected
             } finally {
                 # Move files back
                 foreach ($rec in $moved) {
@@ -860,23 +1007,23 @@ $compileButton.Add_Click({
                 try { if ((Get-ChildItem $tempDir -Force -ErrorAction SilentlyContinue).Count -eq 0) { Remove-Item $tempDir -Force } } catch { }
             }
                 # Return to log view
-                $sortPanel.Visible = $false
-                $logTextBox.Visible = $true
-                try { $sortButton.Text = "Sort" } catch { }
-            try { $sortButton.Text = "Sort" } catch { }
+                #$sortPanel.Visibility = "Hidden"
+                #$logTextBox.Visibility = "Visible"
+                #try { $sortButton.Content = "Sort" } catch { }
+            #try { $sortButton.Content = "Sort" } catch { }
         } else {
-            $success = Start-Compilation -LogTextBox $logTextBox -ShowWarnings $warningsCheckBox.Checked -UseLegacy $legacyCheckBox.Checked
+            $success = Start-Compilation -LogTextBox $logTextBox -ShowWarnings ([bool]$warningsCheckBox.IsChecked) -UseLegacy ([bool]$legacyCheckBox.IsChecked)
         }
         if ($success) {
             $logTextBox.AppendText("Compilation completed successfully!`r`n")
         }
-        # Uncheck legacy checkbox after compilation
-        $legacyCheckBox.Checked = $false
+        # Uncheck legacy toggle after compilation
+        $legacyCheckBox.IsChecked = $false
     } catch {
         $logTextBox.AppendText("ERROR: $($_.Exception.Message)`r`n")
     } finally {
-        $compileButton.Enabled = $true
-        $cancelButton.Enabled = $false
+        $compileButton.IsEnabled = $true
+        $cancelButton.IsEnabled = $false
         $script:cancelCompilation = $false
     }
 })
@@ -885,12 +1032,12 @@ $compileButton.Add_Click({
 $cancelButton.Add_Click({
     $script:cancelCompilation = $true
     $logTextBox.AppendText("Cancelling compilation...`r`n")
-    $cancelButton.Enabled = $false
+    $cancelButton.IsEnabled = $false
 })
 
 # Event handler for sync online button
 $syncButton.Add_Click({
-    $syncButton.Enabled = $false
+    $syncButton.IsEnabled = $false
     try {
         $synced = Sync-OnlineFiles -LogTextBox $logTextBox
         if ($synced -eq 0) { $msg = "No files added from online" }
@@ -901,74 +1048,35 @@ $syncButton.Add_Click({
     } catch {
         $logTextBox.AppendText("Sync failed: $($_.Exception.Message)`r`n")
     } finally {
-        $syncButton.Enabled = $true
+        $syncButton.IsEnabled = $true
     }
-})
-
-# Sort button handler: toggle selection UI
-$sortButton.Add_Click({
-    if ($sortPanel.Visible) {
-        # Close the sort panel and return to log view
-        # Save current checked selections
-        try {
-            $selectedToSave = @()
-            for ($j = 0; $j -lt $checkedListBox.Items.Count; $j++) {
-                if ($checkedListBox.GetItemChecked($j)) { $selectedToSave += $events[$j].File }
-            }
-            $selectedToSave | Out-File -FilePath $selectedFile -Encoding utf8
-            $savedSelected = $selectedToSave
-            try { Add-Content -Path (Join-Path $exeDir "history.log") -Value "$(Get-Date): Saved selections count=$($selectedToSave.Count): $([string]::Join(',', $selectedToSave))" } catch { }
-        } catch { 
-            try { Add-Content -Path (Join-Path $exeDir "history.log") -Value "$(Get-Date): Failed to save selections: $($_.Exception.Message)" } catch { }
-        }
-
-        $sortPanel.Visible = $false
-        $logTextBox.Visible = $true
-        $sortButton.Text = "Sort"
-        $descriptionBox.Text = ""
-    } else {
-        # Open the sort panel and populate list
-        $logTextBox.Visible = $false
-        $sortPanel.Visible = $true
-        # Reload saved selections from disk to reflect external changes or saves from other instances
-        try {
-            if (Test-Path $selectedFile) { $savedSelected = Get-Content -Path $selectedFile -ErrorAction SilentlyContinue | ForEach-Object { $_.Trim() } } else { $savedSelected = @() }
-            try { Add-Content -Path (Join-Path $exeDir "history.log") -Value "$(Get-Date): Reloaded saved selections count=$($savedSelected.Count): $([string]::Join(',', $savedSelected))" } catch { }
-        } catch { $savedSelected = @() }
-
-        $checkedListBox.Items.Clear()
-        for ($i = 0; $i -lt $events.Count; $i++) {
-            $item = $events[$i]
-            $checkedListBox.Items.Add($item.Name)
-            if ($item.File -in $savedSelected) { $checkedListBox.SetItemChecked($i, $true) }
-        }
-        try { Add-Content -Path (Join-Path $exeDir "history.log") -Value "$(Get-Date): Populated Sort list with $($events.Count) events; checked count=$((0..($checkedListBox.Items.Count-1) | Where-Object { $checkedListBox.GetItemChecked($_) }).Count)" } catch { }
-        $sortButton.Text = "Close"
-    }
-})
-
-# Show description when selection changes
-$checkedListBox.Add_SelectedIndexChanged({
-    $idx = $checkedListBox.SelectedIndex
-    if ($idx -ge 0 -and $idx -lt $events.Count) {
-        $descriptionBox.Text = $events[$idx].Description
-    }
-})
-
-# Show description on hover as well
-$checkedListBox.Add_MouseMove({ param($s,$e)
-    try {
-        $pt = New-Object System.Drawing.Point($e.X, $e.Y)
-        $idx = $checkedListBox.IndexFromPoint($pt)
-        if ($idx -ge 0 -and $idx -lt $events.Count) {
-            $descriptionBox.Text = $events[$idx].Description
-        }
-    } catch { }
 })
 
 # Show initial message
 $logTextBox.AppendText("SSF2 Event Compiler ready.`r`n")
 $logTextBox.AppendText("Click 'Compile' to start compilation.`r`n`r`n")
 
-# Show the form
-$form.ShowDialog()
+# Set light theme
+$window.Background = [System.Windows.Media.Brushes]::LightGray
+$window.Foreground = [System.Windows.Media.Brushes]::Black
+$logTextBox.Background = [System.Windows.Media.Brushes]::LightGray
+$logTextBox.Foreground = [System.Windows.Media.Brushes]::Black
+$descriptionBox.Background = [System.Windows.Media.Brushes]::LightGray
+$descriptionBox.Foreground = [System.Windows.Media.Brushes]::Black
+$scrollViewer.Background = [System.Windows.Media.Brushes]::LightGray
+$scrollViewer.Foreground = [System.Windows.Media.Brushes]::Black
+$compileButton.Background = [System.Windows.Media.Brushes]::LightGray
+$compileButton.Foreground = [System.Windows.Media.Brushes]::Black
+$cancelButton.Background = [System.Windows.Media.Brushes]::LightGray
+$cancelButton.Foreground = [System.Windows.Media.Brushes]::Black
+$syncButton.Background = [System.Windows.Media.Brushes]::LightGray
+$syncButton.Foreground = [System.Windows.Media.Brushes]::Black
+$selectAllButton.Background = [System.Windows.Media.Brushes]::LightGray
+$selectAllButton.Foreground = [System.Windows.Media.Brushes]::Black
+$warningsCheckBox.Background = [System.Windows.Media.Brushes]::LightGray
+$warningsCheckBox.Foreground = [System.Windows.Media.Brushes]::Black
+$legacyCheckBox.Background = [System.Windows.Media.Brushes]::LightGray
+$legacyCheckBox.Foreground = [System.Windows.Media.Brushes]::Black
+
+# Show the window
+$window.ShowDialog()

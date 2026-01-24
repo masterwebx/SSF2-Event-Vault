@@ -297,7 +297,7 @@ function Start-Compilation {
                 $mainFile = $asFiles | Where-Object { [System.IO.Path]::GetFileName($_) -ieq "ExternalEvents.as" } | Select-Object -First 1
                 if (-not $mainFile) { $asFiles = $asFiles | Sort-Object; $mainFile = $asFiles[0] }
                 $mainName = [System.IO.Path]::GetFileName($mainFile)
-                if ($mainFile -match "\\online\\") { $mainFolder = "online" } elseif ($mainFile -match "\\files\\") { $mainFolder = "files" } else { $mainFolder = "." }
+                if ($mainFile -match "\\online\\") { $mainFolder = "online" } elseif ($mainFile -match "\\files\\") { $mainFolder = "files" } elseif ($mainFile -match "\\legacy\\") { $mainFolder = "legacy" } else { $mainFolder = "." }
                 $relativeMain = Join-Path $mainFolder $mainName
 
                 $includeClasses = ""

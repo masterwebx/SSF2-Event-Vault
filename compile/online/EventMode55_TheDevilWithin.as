@@ -13,7 +13,7 @@ package
 			{
 				"id":"TheDevilWithin",
                 "classAPI":EventMode55_TheDevilWithin,
-                "name":"55. The Devil Within",
+                "name":"The Devil Within",
                 "description":"A battle against yourself, your pain is the only way to win.",
                 "chooseCharacter":true
 			}

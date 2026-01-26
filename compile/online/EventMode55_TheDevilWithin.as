@@ -15,7 +15,8 @@ package
                 "classAPI":EventMode55_TheDevilWithin,
                 "name":"The Devil Within",
                 "description":"A battle against yourself, your pain is the only way to win.",
-                "chooseCharacter":true
+                "chooseCharacter":true,
+                "creator":"MasterWex"
 			}
 		];
         public var updated:* = false;

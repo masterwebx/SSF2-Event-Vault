@@ -1,0 +1,191 @@
+<Window x:Class="SSF2EventCompilerWPF.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:SSF2EventCompilerWPF"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        mc:Ignorable="d"
+        Title="SSF2 Event Compiler" Height="650" Width="1100"
+        WindowStartupLocation="Manual"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="CanResizeWithGrip"
+        WindowStyle="None">
+    <Window.Resources>
+        <Style x:Key="EventCardStyle" TargetType="ui:Card">
+            <Setter Property="Margin" Value="1"/>
+            <Setter Property="Padding" Value="10"/>
+        </Style>
+        <Style x:Key="ChromeButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Width" Value="80"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="0">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ControlFillColorTertiaryBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="32"/>
+            <RowDefinition Height="4*"/>
+            <RowDefinition Height="2.1*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Custom Title Bar -->
+        <Border Grid.Row="0" Background="{DynamicResource SolidBackgroundFillColorBaseBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Icon and Title -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
+                    <Image x:Name="TitleBarIcon" Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="SSF2 Event Compiler" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                </StackPanel>
+
+                <!-- Drag Area -->
+                <Border Grid.Column="1" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown"/>
+
+                <!-- Window Controls -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0">
+                    <Button x:Name="SettingsButton" Click="SettingsButton_Click" Width="36" Height="32" Background="Transparent" BorderThickness="0" ToolTip="Settings">
+                        <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="13" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    </Button>
+                    <Button x:Name="MinimizeButton" Click="MinimizeButton_Click" Width="32" Height="32" Background="Transparent" BorderThickness="0" ToolTip="Minimize">
+                        <TextBlock Text="&#xE949;" FontFamily="Segoe MDL2 Assets" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    </Button>
+                    <Button x:Name="MaximizeButton" Click="MaximizeButton_Click" Width="32" Height="32" Background="Transparent" BorderThickness="0" ToolTip="Maximize">
+                        <TextBlock Text="&#xE739;" FontFamily="Segoe MDL2 Assets" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    </Button>
+                    <Button x:Name="CloseButton" Click="CloseButton_Click" Width="32" Height="32" Background="Transparent" BorderThickness="0" ToolTip="Close">
+                        <TextBlock Text="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Content -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1*" MinWidth="400" />
+                <ColumnDefinition Width="1*" MinWidth="300" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Events Panel -->
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Event List Card -->
+                <ui:Card Grid.Row="0" Margin="2" VerticalAlignment="Stretch" VerticalContentAlignment="Top">
+                    <DockPanel LastChildFill="True">
+                        <!-- Header -->
+                        <TextBlock DockPanel.Dock="Top" Text="Event Selection" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+
+                        <!-- Events List -->
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="eventStackPanel" Margin="0,0,0,10" VerticalAlignment="Top"/>
+                        </ScrollViewer>
+                    </DockPanel>
+                </ui:Card>
+
+                <!-- Action Buttons Card -->
+                <ui:Card Grid.Row="1" Margin="2,2,2,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- First row: Select All toggle -->
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="Select All Events" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <ui:ToggleSwitch x:Name="selectToggleSwitch" Checked="SelectToggleSwitch_Checked" Unchecked="SelectToggleSwitch_Unchecked"/>
+                        </StackPanel>
+
+                        <!-- Second row: Other buttons -->
+                        <StackPanel Grid.Row="1" Orientation="Horizontal">
+                            <ui:Button x:Name="syncButton" Content="Sync Online" Icon="{ui:SymbolIcon ArrowSync24}" Click="SyncButton_Click" Margin="0,0,8,0" Appearance="Primary" />
+                            <ui:Button x:Name="compileButton" Content="Compile Events" Icon="{ui:SymbolIcon Play24}" Appearance="Primary" Click="CompileButton_Click" Margin="0,0,8,0" />
+                            <ui:Button x:Name="compileLegacyButton" Content="Compile Legacy" Icon="{ui:SymbolIcon History24}" Click="CompileLegacyButton_Click" Margin="0,0,8,0" Appearance="Primary" />
+                        </StackPanel>
+                    </Grid>
+                </ui:Card>
+            </Grid>
+
+            <!-- Preview Panel -->
+            <ui:Card Grid.Column="1" Margin="2" VerticalAlignment="Stretch">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Event Preview" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+
+                    <Image x:Name="previewImage" Grid.Row="1" Margin="0,0,0,10" Stretch="Uniform" />
+
+                    <TextBox x:Name="descriptionTextBox" Grid.Row="2" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="60" Text="Select event to see preview" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                </Grid>
+            </ui:Card>
+        </Grid>
+
+        <!-- Console Log -->
+        <ui:Card Grid.Row="2" Margin="2" VerticalAlignment="Stretch">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="Status" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,5" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <TextBox x:Name="statusTextBlock" Grid.Row="1" Text="Ready" IsReadOnly="True" FontSize="12" Margin="0,0,0,10" Foreground="{DynamicResource TextFillColorSecondaryBrush}" BorderThickness="0" Background="Transparent"/>
+
+                <TextBlock Grid.Row="2" Text="Console Log" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,5" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <TextBox x:Name="logTextBox" Grid.Row="3" IsReadOnly="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+            </Grid>
+        </ui:Card>
+
+        <!-- Console Log (Bottom Panel) -->
+        <ui:SnackbarPresenter x:Name="SnackbarPresenter" />
+
+        <!-- Progress Ring for compilation -->
+        <ui:ProgressRing x:Name="ProgressRing" Grid.Row="1" IsIndeterminate="True" Visibility="Collapsed" />
+    </Grid>
+</Window>

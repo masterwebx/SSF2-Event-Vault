@@ -1,6 +1,0 @@
-01/23/2026 23:35:28: Script started. PID=16164, Args=C:\Users\glwex\Documents\GitHub\SSF2-Event-Vault\SSF2 Event Compiler.exe
-01/23/2026 23:35:28: GUI init - loaded savedSelected count=0
-01/23/2026 23:35:28: GUI init - built events count=5
-01/23/2026 23:35:29: Sync-OnlineFiles failed: The remote server returned an error: (404) Not Found.
-01/23/2026 23:35:29: No files added from online
-01/23/2026 23:35:29: Populated Sort list with 5 events; checked count=Microsoft.PowerShell.Commands.GenericMeasureInfo.Count

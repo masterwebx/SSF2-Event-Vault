@@ -1,15 +1,49 @@
-compile/history.log
-compile/selected_events.txt
+# Build outputs
+bin/
+obj/
+publish_final/
+publish_clean/
+
+# Generated files
+*.swf
 custom_events.swf
+selected_events.txt
+current_theme.txt
+debug.log
 history.log
-compile/debug_parse_test.ps1
-compile/files/ExternalEvents.as
-compile/debug.log
-compile/debug_gui.log
-compile/run_old.ps1
-compile/RUN_OLD_DOCUMENTATION.md
-compile/theme.txt
-compile/history.log
-compile/files/ExternalEvents.as
-compile/files/ExternalEvents.as
-compile/history.log
+console_output.txt
+output.txt
+
+# User-specific files
+*.user
+*.suo
+*.cache
+
+# IDE files
+.vscode/settings.json
+.idea/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# NuGet packages
+*.nupkg
+*.snupkg
+packages/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Publish outputs
+*.zip
+*.exe

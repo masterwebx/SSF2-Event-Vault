@@ -1,15 +1,28 @@
-# SSF2 Event Vault
-Stores custom events for Super Smash Flash 2 and the compiler
+# SSF2 Event Compiler WPF
 
-## Usage
+A C# WPF application converted from the original PowerShell script for compiling SSF2 events, featuring a Material Design UI.
 
-The SSF2 Event Compiler.exe and the folders must be placed alongside ssf2.exe.
+## Features
 
-To create and compile a custom event:
+- GUI for selecting and compiling SSF2 event files
+- Image previews for events
+- Console log output
+- Material Design styling
 
-1. Create a new event file in the `compile/files` directory.
-2. Run `SSF2 Event Compiler.exe`.
-3. Click Compile.
-4. Test the event in the game.
+## Requirements
 
-*Note: In compiler, use legacy option to restore vanilla SSF2 events.*
+- .NET 8.0
+- MaterialDesignThemes and MaterialDesignColors NuGet packages
+
+## Building
+
+1. Restore NuGet packages: `dotnet restore`
+2. Build: `dotnet build`
+
+## Running
+
+`dotnet run`
+
+## Notes
+
+This is a conversion of the PowerShell script. Some features like the actual compilation using Flex SDK are not fully implemented yet and need further porting.

@@ -22,7 +22,3 @@ A C# WPF application converted from the original PowerShell script for compiling
 ## Running
 
 `dotnet run`
-
-## Notes
-
-This is a conversion of the PowerShell script. Some features like the actual compilation using Flex SDK are not fully implemented yet and need further porting.

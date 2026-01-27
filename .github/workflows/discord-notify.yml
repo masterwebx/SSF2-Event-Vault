@@ -3,30 +3,33 @@ name: Discord Notify - compile/online Changes
 on:
   push:
     branches:
-      - main  # Change if your default branch is different (e.g., master)
+      - main  # Change if your default branch is different
     paths:
-      - 'compile/online/**'  # Triggers only if files in this folder (or subfolders) change
+      - 'compile/online/**'  # Only triggers when files in this folder or subfolders change
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
       - name: Send Discord Notification
-        uses: Ilshidur/action-discord@master
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        with:
-          args: |
-            **New changes in `compile/online` folder!** 🚀
-            
-            **Repository:** {{ EVENT_PAYLOAD.repository.full_name }}
-            **Branch:** {{ EVENT_PAYLOAD.ref | replace('refs/heads/', '') }}
-            **Pushed by:** {{ EVENT_PAYLOAD.pusher.name }}
-            
-            **Latest commit message:**
-            {{ EVENT_PAYLOAD.head_commit.message }}
-            
-            **Author:** {{ EVENT_PAYLOAD.head_commit.author.name }}
-            
-            **View all changes in this push:** <{{ EVENT_PAYLOAD.compare }}>
-            **Latest commit details:** <{{ EVENT_PAYLOAD.head_commit.url }}>
+        run: |
+          jq -n \
+            --arg title "New changes in compile/online folder! 🚀" \
+            --arg repo "${{ github.repository }}" \
+            --arg branch "${{ github.ref_name }}" \
+            --arg pusher "${{ github.event.pusher.name }}" \
+            --arg message "${{ github.event.head_commit.message }}" \
+            --arg author "${{ github.event.head_commit.author.name }}" \
+            --arg compare_url "https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}" \
+            --arg commit_url "https://github.com/${{ github.repository }}/commit/${{ github.sha }}" \
+            '{
+              embeds: [{
+                title: $title,
+                description: "**Repository:** \($repo)\n**Branch:** \($branch)\n**Pushed by:** \($pusher)\n\n**Latest commit message:**\n\($message)\n\n**Author:** \($author)\n\n[View all changes in this push](\($compare_url))\n[Latest commit details](\($commit_url))",
+                color: 3447003,
+                timestamp: now
+              }]
+            }' \
+          | curl -H "Content-Type: application/json" -d @- $DISCORD_WEBHOOK

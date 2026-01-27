@@ -15,23 +15,32 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          # Safely escape the commit message (handles newlines, quotes, etc.)
+          # Safely escape the commit message for JSON (handles newlines, quotes, etc.)
           MESSAGE_JSON=$(printf '%s' "${{ github.event.head_commit.message }}" | jq -Rs .)
 
           jq -n \
             --arg title "New changes in compile/online folder! 🚀" \
-            --arg repo "${{ github.repository }}" \
-            --arg branch "${{ github.ref_name }}" \
-            --arg pusher "${{ github.event.pusher.name || github.actor }}" \
-            --argjson message "$MESSAGE_JSON" \
             --arg author "${{ github.event.head_commit.author.name }}" \
+            --arg branch "${{ github.ref_name }}" \
+            --argjson message "$MESSAGE_JSON" \
             --arg compare_url "${{ github.event.compare }}" \
             --arg commit_url "https://github.com/${{ github.repository }}/commit/${{ github.sha }}" \
             --arg timestamp "${{ github.event.head_commit.timestamp }}" \
             '{
               embeds: [{
                 title: $title,
-                description: "**Repository:** \($repo)\n**Branch:** \($branch)\n**Pushed by:** \($pusher)\n\n**Latest commit message:**\n$message\n\n**Author:** \($author)\n\n[View all changes in this push](\($compare_url))\n[Latest commit details](\($commit_url))",
+                fields: [
+                  {
+                    name: "Commit Summary",
+                    value: ($message // "No commit message"),
+                    inline: false
+                  },
+                  {
+                    name: "Details",
+                    value: "**Author:** \($author)\n**Branch:** \($branch)\n\n[View all changes](\($compare_url))\n[View commit](\($commit_url))",
+                    inline: false
+                  }
+                ],
                 color: 3447003,  # Blue
                 timestamp: $timestamp
               }]

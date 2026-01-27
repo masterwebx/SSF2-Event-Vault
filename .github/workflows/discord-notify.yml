@@ -1,0 +1,32 @@
+name: Discord Notify - compile/online Changes
+
+on:
+  push:
+    branches:
+      - main  # Change if your default branch is different (e.g., master)
+    paths:
+      - 'compile/online/**'  # Triggers only if files in this folder (or subfolders) change
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Discord Notification
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: |
+            **New changes in `compile/online` folder!** 🚀
+            
+            **Repository:** {{ EVENT_PAYLOAD.repository.full_name }}
+            **Branch:** {{ EVENT_PAYLOAD.ref | replace('refs/heads/', '') }}
+            **Pushed by:** {{ EVENT_PAYLOAD.pusher.name }}
+            
+            **Latest commit message:**
+            {{ EVENT_PAYLOAD.head_commit.message }}
+            
+            **Author:** {{ EVENT_PAYLOAD.head_commit.author.name }}
+            
+            **View all changes in this push:** <{{ EVENT_PAYLOAD.compare }}>
+            **Latest commit details:** <{{ EVENT_PAYLOAD.head_commit.url }}>

@@ -1,35 +1,32 @@
-﻿package
+package
 {
 	import flash.display.MovieClip;
 	
 	public class EventMode_MeleeKing extends SSF2CustomMatch
 	{
+		public var bowserSucks:Boolean = false;
+		public var bowserFinal:Boolean = false;
+		public var bowserName:Boolean = false;
 		public var eventinfo:Array = [
 			{
 				"id":"meleeKing",
                 "classAPI":EventMode_MeleeKing,
                 "name":"Rise of the Melee King!",
-                "description":"Mario takes on the king of melee, defeat him to show your superiority!",
-                "previewCharacter":"mario",
-                "previewCostume":0,
+                "description":"Take on the king of melee! Defeat him to show your superiority!",
+                "chooseCharacter":true,
                 "creator":"MasterWex"
 			}
 		];
-		private var player2PreviousLives:int = 2;
 		public function EventMode_MeleeKing(api:*)
 		{
 			super(api);
 		}
 		public override function initialize():void
 		{
-			SSF2API.getPlayer(2).setSizeStatus(1);
-			SSF2API.getPlayer(2).lockSizeStatus(true);
-			SSF2API.getPlayer(1).updateCharacterStats({
-                "displayName":"The Hero"
-            });
-			SSF2API.getPlayer(2).updateCharacterStats({
-                "displayName":"The King of Melee"
-            });
+			
+			SSF2API.getPlayer(2).setLivesEnabled(false);
+			SSF2API.getPlayer(1).setDamage(300);
+			
 			
 			
 			SSF2API.getGameTimer().setCurrentTime(SSF2API.getGameTimer().getCurrentTime());
@@ -43,7 +40,7 @@
 			};
 			
 			game.playerSettings.push({ 
-				character: "mario",
+				character: initSettings.playerSettings[0].character,
 				name: initSettings.playerSettings[0].name,
 				costume: initSettings.playerSettings[0].costume,
 				lives: 1,
@@ -51,29 +48,61 @@
 				team: -1
 			});
 			game.playerSettings.push({ 
-				character: "giga_bowser",
-				lives: 2,
+				character: "bowser",
+				lives: 1,
 				human: false,
 				team: -1,
-				level: 8
+				level: 9,
+				unlimitedFinal:true
 			});
 			
+			game.levelData.usingStamina = true;
 			game.levelData.usingLives = true;
+            game.levelData.startStamina = 400;
 			game.levelData.usingTime = true;
 			game.levelData.lives = 2;
-			game.levelData.time = 3;
+			game.levelData.time = 2;
 			game.levelData.hazards = true;
-			game.levelData.stage = "battlefield2";
+			game.levelData.stage = "draculascastle";
+			game.levelData.musicOverride = "bgm_MKDDBowsersCastle";
 			var allItems:Array = SSF2API.getItemStatsList();
 			for (var i:int = 0; i < allItems.length; i++)
 			{
 				delete game.items.items[allItems[i].statsName];
 			}
-			game.items.frequency = ItemSettings.FREQUENCY_HIGH;
+			game.items.frequency = ItemSettings.FREQUENCY_OFF;
 			return game;
 		}
 		public override function update():void
 		{
+			if (SSF2API.getPlayer(2).inState(CState.REVIVAL))
+			{
+				bowserFinal = false;	
+				bowserName = false;
+				SSF2API.getPlayer(2).setDamage(SSF2API.getPlayer(1).getDamage());
+			}
+			if(bowserFinal == false)
+			{
+				SSF2API.getPlayer(2).forceAttack("special");				
+				bowserFinal = true;				
+			}
+			if(SSF2API.getElapsedFrames() == 5 && bowserName == false)
+			{				
+				SSF2API.getPlayer(2).updateCharacterStats({
+					"displayName":"The King of Melee",
+					"attackRatio":2,
+					"heavyArmor":50
+				});	
+				bowserName = true
+			}
+			if (SSF2API.getPlayer(2).getDamage() <= 1 && bowserSucks != true) 
+			{
+				SSF2API.getPlayer(2).updateCharacterStats({
+					"displayName":"Bowser"
+				});
+				 SSF2API.getPlayer(2).endFinalForm();
+				 bowserSucks = true;
+			}
 			if (!SSF2API.isGameEnded())
 			{				
 				var players:Array = SSF2API.getPlayers();				
@@ -81,7 +110,7 @@
 				{
 					matchData.success = false;
 					SSF2API.endGame({success: false, immediate: false });
-				} else if (players[1].getLives() <= 0)
+				} else if (players[1].getDamage() == 0)
 				{
 					//Set rank
 					var rank = "F";
@@ -106,7 +135,11 @@
 					matchData.scoreType = "time";
 					matchData.rank = rank;
 					matchData.fps = SSF2API.getAverageFPS();
-					SSF2API.endGame({immediate:false});
+					SSF2API.endGame({
+                        success: true,
+                        immediate: false,
+                        slowMo: false
+                    });
 				}
 			}
 		}

@@ -7,6 +7,7 @@ package
 		public var bowserSucks:Boolean = false;
 		public var bowserFinal:Boolean = false;
 		public var bowserName:Boolean = false;
+		public var prevBowserInRevival:Boolean = false;
 		public var eventinfo:Array = [
 			{
 				"id":"meleeKing",
@@ -75,12 +76,21 @@ package
 		}
 		public override function update():void
 		{
-			if (SSF2API.getPlayer(2).inState(CState.REVIVAL))
+			// Track when Bowser leaves revival state
+			var bowserInRevival:Boolean = SSF2API.getPlayer(2).inState(CState.REVIVAL);
+			if (bowserInRevival)
 			{
-				bowserFinal = false;	
-				bowserName = false;
+				
 				SSF2API.getPlayer(2).setDamage(SSF2API.getPlayer(1).getDamage());
 			}
+			else if (prevBowserInRevival && !bowserInRevival)
+			{
+				// Bowser just left the revival platform
+				SSF2API.print("Bowser has left the spawn platform!");
+				bowserFinal = false;	
+				bowserName = false;
+			}
+			prevBowserInRevival = bowserInRevival;
 			if(bowserFinal == false)
 			{
 				SSF2API.getPlayer(2).forceAttack("special");				
@@ -112,19 +122,19 @@ package
 					SSF2API.endGame({success: false, immediate: false });
 				} else if (players[1].getDamage() == 0)
 				{
-					//Set rank
+					//Set rank based on elapsed time (2 minute match = 7200 frames)
 					var rank = "F";
-					if(SSF2API.getElapsedFrames() <= 360)
+					if(SSF2API.getElapsedFrames() <= 3600)
 						rank = "S";
-					else if(SSF2API.getElapsedFrames() <= 615)
+					else if(SSF2API.getElapsedFrames() <= 4200)
 						rank = "A";
-					else if(SSF2API.getElapsedFrames() <= 850)
+					else if(SSF2API.getElapsedFrames() <= 4800)
 						rank = "B";
-					else if(SSF2API.getElapsedFrames() <= 1000)
+					else if(SSF2API.getElapsedFrames() <= 5400)
 						rank = "C";
-					else if(SSF2API.getElapsedFrames() <= 1350)
+					else if(SSF2API.getElapsedFrames() <= 6000)
 						rank = "D";
-					else if(SSF2API.getElapsedFrames() <= 1500)
+					else if(SSF2API.getElapsedFrames() <= 6600)
 						rank = "E";
 					else
 						rank = "F";

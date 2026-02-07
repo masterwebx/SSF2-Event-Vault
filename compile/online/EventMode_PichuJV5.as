@@ -1,4 +1,4 @@
-﻿package
+package
 {
 	import flash.display.MovieClip;
 	
@@ -22,7 +22,8 @@
 		}
 		public override function initialize():void
 		{			
-			SSF2API.getGameTimer().setCurrentTime(SSF2API.getGameTimer().getCurrentTime());
+			SSF2API.getGameTimer().setCurrentTime(SSF2API.getGameTimer().getCurrentTime())
+			SSF2API.getPlayer(1).setLivesEnabled(false);
 		}
 		public override function matchSetup(initSettings:Object):Object
 		{
@@ -64,9 +65,12 @@
 		{
 			if (!SSF2API.isGameEnded())
 			{				
+				
 				var players:Array = SSF2API.getPlayers();				
-				if (players[0].getDamage() > 0)
+				if (players[0].getDamage() > 0 && !players[0].inState(CState.ATTACKING) || players[0].inState(CState.REVIVAL))
 				{
+				SSF2API.print("You got hit! Try again!\n!JV5 Failed!");
+				SSF2API.getGameTimer().setCurrentTime(0);
 				// Restart the event instead of failing
 				elapsedFrames = SSF2API.getElapsedFrames();
 				players[1].setLives(4);
@@ -110,6 +114,9 @@
 				{
 					rank = "F";
 				}
+					matchData.score = SSF2API.getElapsedFrames() - elapsedFrames;
+					matchData.scoreType = "time";
+					matchData.rank = rank;
 					matchData.fps = SSF2API.getAverageFPS();
 					SSF2API.endGame({
                         success: true,

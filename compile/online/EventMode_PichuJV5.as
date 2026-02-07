@@ -114,7 +114,8 @@ package
 				{
 					rank = "F";
 				}
-					matchData.score = SSF2API.getElapsedFrames() - elapsedFrames;
+                    matchData.success = true;					
+                    matchData.score = SSF2API.getElapsedFrames() - elapsedFrames;
 					matchData.scoreType = "time";
 					matchData.rank = rank;
 					matchData.fps = SSF2API.getAverageFPS();

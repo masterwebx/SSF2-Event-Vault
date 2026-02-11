@@ -1,4 +1,4 @@
-﻿package {
+package {
 	import flash.display.MovieClip;
 
 	public class EventMode_LordJungle2_B extends SSF2MultiManMatch {
@@ -125,5 +125,33 @@
 				costume: 2
 			}
 		}
+		override protected function getMultimanCostumeData(_arg_1:String):Object
+        {
+            
+            if (_arg_1 == "donkeykong")
+            {
+                return ({
+                    "hue":-170,
+                    "saturation":-20,
+                    "brightness":10,
+                    "redOffset":15,
+                    "greenOffset":-15,
+                    "blueOffset":20,
+                    "blueMultiplier":0.55
+                });
+            };
+            return ({
+                "alphaMultiplier":0.9,
+                "redMultiplier":-1,
+                "greenMultiplier":-1,
+                "blueMultiplier":-1,
+                "redOffset":0xFF,
+                "greenOffset":0xFF,
+                "blueOffset":0xFF,
+                "saturation":-100,
+                "brightness":35,
+                "contrast":10
+            });
+        }
 	}
 }
